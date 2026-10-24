@@ -200,9 +200,9 @@
   const FLARE_V = `
     attribute vec3 aDir; attribute float aSeed; uniform float uTime,uR,uPx; varying float vA;
     void main(){ float life=fract(uTime*(0.07+aSeed*0.08)+aSeed*7.); float s=sin(life*3.1416);
-      vec3 p=aDir*(uR+s*(1.5+aSeed*5.5)); vA=s*(.4+aSeed*.6);
-      vec4 mv=modelViewMatrix*vec4(p,1.); gl_Position=projectionMatrix*mv; gl_PointSize=clamp((1.2+aSeed*2.5)*uPx*(220./-mv.z),1.,16.); }`;
-  const FLARE_F = `varying float vA; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,0.,d); gl_FragColor=vec4(1.,.55+.3*a,.15,a*vA); }`;
+      vec3 p=aDir*(uR+s*(0.4+aSeed*1.2)); vA=s*(.2+aSeed*.3);
+      vec4 mv=modelViewMatrix*vec4(p,1.); gl_Position=projectionMatrix*mv; gl_PointSize=clamp((0.2+aSeed*0.8)*uPx*(100./-mv.z),1.,4.); }`;
+  const FLARE_F = `varying float vA; void main(){ float d=length(gl_PointCoord-.5); float a=smoothstep(.5,0.,d); gl_FragColor=vec4(1.,.7+.3*a,.3,a*vA); }`;
   const ATMO_V = `
     uniform vec3 uSun; varying vec3 vN,vV,vS;
     void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.); vV=normalize(-mv.xyz);
@@ -270,34 +270,58 @@
       return p;
     }
     _buildFarStars() {
-      const N = 5000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
+      const N = 8000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
       for (let i = 0; i < N; i++) {
-        const u = Math.random() * 2 - 1, a = Math.random() * TAU, s = Math.sqrt(1 - u * u), R = 6000;
+        const u = Math.random() * 2 - 1, a = Math.random() * TAU, s = Math.sqrt(1 - u * u), R = 4000 + Math.random() * 4000;
         pos.set([R * s * Math.cos(a), R * u, R * s * Math.sin(a)], i * 3);
-        const w = Math.random(); col.set([0.7 + 0.3 * w, 0.8 + 0.1 * w, 1], i * 3); sz[i] = 6 + Math.random() * 14; al[i] = 0.35 + Math.random() * 0.6;
+        const w = Math.random(); col.set([0.65 + 0.35 * w, 0.75 + 0.2 * w, 1], i * 3); sz[i] = 4 + Math.random() * 10; al[i] = 0.25 + Math.random() * 0.6;
       }
-      this.scene.add(this._particles(pos, col, sz, al, 1.2));
+      this.scene.add(this._particles(pos, col, sz, al, 1.0));
     }
     _buildGalaxy() {
-      const N = 70000, R = 900, arms = 4, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
+      const N = 85000, R = 950, arms = 4, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
       const g = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+      
       for (let i = 0; i < N; i++) {
         let r, a, y; const c = [1, 1, 1];
-        if (Math.random() < 0.2) { r = Math.pow(Math.random(), 1.7) * 170; a = Math.random() * TAU; y = g() * 28 * (1 - r / 220); c[0] = 1; c[1] = 0.82; c[2] = 0.6; }
-        else {
-          r = (0.05 + Math.pow(Math.random(), 0.8)) * R; const arm = Math.floor(Math.random() * arms);
-          a = arm * (TAU / arms) + (r / R) * 5.4 + g() * 0.42 * (1.1 - 0.6 * r / R); y = g() * 14 * (1 - 0.8 * r / R);
-          const t = r / R; c[0] = lerp(1, 0.4, Math.min(1, t * 1.3)); c[1] = lerp(0.85, 0.62, t); c[2] = lerp(0.65, 1, Math.min(1, t * 1.6));
-          if (Math.random() < 0.04) { c[0] = 1; c[1] = 0.5; c[2] = 0.75; }
+        if (Math.random() < 0.28) { 
+          // Dense central bulge & halo
+          r = Math.pow(Math.random(), 1.6) * 220; 
+          a = Math.random() * TAU; 
+          y = g() * 38 * (1 - r / 250); 
+          c[0] = 1; c[1] = 0.88; c[2] = 0.7; 
+        } else {
+          // Even spiral arms distribution all around 360 degrees
+          r = (0.06 + Math.pow(Math.random(), 0.82)) * R; 
+          const arm = i % arms; 
+          const armAngle = arm * (TAU / arms);
+          const spiralOffset = (r / R) * 5.2;
+          const scatter = g() * 0.38 * (1.1 - 0.5 * r / R);
+          
+          a = armAngle + spiralOffset + scatter; 
+          y = g() * 18 * (1 - 0.75 * r / R);
+          
+          const t = r / R; 
+          c[0] = lerp(1, 0.4, Math.min(1, t * 1.25)); 
+          c[1] = lerp(0.88, 0.65, t); 
+          c[2] = lerp(0.7, 1, Math.min(1, t * 1.5));
+          if (Math.random() < 0.05) { c[0] = 1; c[1] = 0.55; c[2] = 0.8; }
         }
-        pos.set([Math.cos(a) * r, y, Math.sin(a) * r], i * 3); col.set(c, i * 3); sz[i] = 1.2 + Math.random() * 2.6; al[i] = 0.35 + Math.random() * 0.65;
+        pos.set([Math.cos(a) * r, y, Math.sin(a) * r], i * 3); 
+        col.set(c, i * 3); 
+        sz[i] = 1.1 + Math.random() * 2.4; 
+        al[i] = 0.3 + Math.random() * 0.7;
       }
       this.galaxyG.add(this._particles(pos, col, sz, al));
-      // translucent dust lanes
-      const D = 5000, dp = new Float32Array(D * 3), dc = new Float32Array(D * 3), ds = new Float32Array(D), da = new Float32Array(D);
+
+      // Cosmic Dust lanes spread balanced across all 4 arms
+      const D = 6500, dp = new Float32Array(D * 3), dc = new Float32Array(D * 3), ds = new Float32Array(D), da = new Float32Array(D);
       for (let i = 0; i < D; i++) {
-        const r = (0.1 + Math.pow(Math.random(), 0.9)) * R, arm = Math.floor(Math.random() * arms), a = arm * (TAU / arms) + (r / R) * 5.4 + g() * 0.25;
-        dp.set([Math.cos(a) * r, g() * 10, Math.sin(a) * r], i * 3); dc.set([0.25, 0.35, 0.9], i * 3); ds[i] = 26 + Math.random() * 30; da[i] = 0.05;
+        const r = (0.08 + Math.pow(Math.random(), 0.88)) * R, arm = i % arms, a = arm * (TAU / arms) + (r / R) * 5.2 + g() * 0.22;
+        dp.set([Math.cos(a) * r, g() * 12, Math.sin(a) * r], i * 3); 
+        dc.set([0.22, 0.32, 0.85], i * 3); 
+        ds[i] = 24 + Math.random() * 32; 
+        da[i] = 0.045;
       }
       this.galaxyG.add(this._particles(dp, dc, ds, da));
     }
@@ -368,17 +392,17 @@
       // Sun
       this.sunMat = new THREE.ShaderMaterial({ vertexShader: SUN_V, fragmentShader: SUN_F, uniforms: { uTime: { value: 0 } } });
       const sun = new THREE.Mesh(new THREE.SphereGeometry(9, 64, 48), this.sunMat); S.add(sun);
-      [[0xffb347, 42, 0.55], [0xff7a1a, 85, 0.22]].forEach(([c, s, o]) => {
+      [[0xffb347, 36, 0.45], [0xff7a1a, 70, 0.15]].forEach(([c, s, o]) => {
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }));
         sp.scale.set(s, s, 1); S.add(sp);
       });
-      // FIXED: randomDirection() removed for Three.js r128 compatibility
-      const FN = 2400, fd = new Float32Array(FN * 3), fs = new Float32Array(FN), centers = Array.from({ length: 14 }, () => new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize());
+      // Subtle Solar Flare Particles
+      const FN = 300, fd = new Float32Array(FN * 3), fs = new Float32Array(FN), centers = Array.from({ length: 14 }, () => new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize());
       for (let i = 0; i < FN; i++) { const d = centers[i % 14].clone().add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.12)).normalize(); fd.set([d.x, d.y, d.z], i * 3); fs[i] = Math.random(); }
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FN * 3), 3));
       fg.setAttribute('aDir', new THREE.BufferAttribute(fd, 3)); fg.setAttribute('aSeed', new THREE.BufferAttribute(fs, 1));
       this.flareMat = new THREE.ShaderMaterial({ vertexShader: FLARE_V, fragmentShader: FLARE_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { uTime: { value: 0 }, uR: { value: 9 }, uPx: { value: this.px } } });
+        uniforms: { uTime: { value: 0 }, uR: { value: 9 }, uPx: { value: this.px * 0.15 } } });
       const flares = new THREE.Points(fg, this.flareMat); flares.frustumCulled = false; S.add(flares);
       const sp = new THREE.Mesh(new THREE.SphereGeometry(13, 8, 8), new THREE.MeshBasicMaterial({ visible: false }));
       sp.userData.body = { id: 'sun', name: 'Sun', type: 'Star · G-type main sequence', obj: sp, pickR: 14, focusR: 30, minR: 20, kind: 'sun',
@@ -538,19 +562,43 @@
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
       for (const h of frame.hands) {
-        if (h.gesture === 'palm') { this.goal.theta -= h.delta.x * 5.5; this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); }
-        else if (h.gesture === 'pinch') this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1));
+        if (h.gesture === 'palm') { 
+          this.goal.theta -= h.delta.x * 5.5; 
+          this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
+        }
+        else if (h.gesture === 'pinch' || h.gesture === 'victory' || h.gesture === 'peace') {
+          // Trigger Card Action on Pinch / Victory / 2-Finger gesture
+          if (this.selected && this.selected.action && now - (this.lastAction || 0) > 1000) {
+            this.lastAction = now;
+            if (this.selected.kind === 'solar') this.enterSystem();
+            else if (this.selected.id === 'earth') this.hooks.onLand && this.hooks.onLand();
+          } else {
+            this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1));
+          }
+        }
         else if (h.gesture === 'point') pointer = h;
-        if (h.gesture === 'fist' && this.prevGesture[h.side] !== 'fist' && now - this.lastReset > 800) { this.lastReset = now; this.reset(); }
+
+        if (h.gesture === 'fist' && this.prevGesture[h.side] !== 'fist' && now - this.lastReset > 800) { 
+          this.lastReset = now; 
+          this.reset(); 
+        }
         this.prevGesture[h.side] = h.gesture;
       }
       for (const s of ['left', 'right']) if (!frame.hands.find((h) => h.side === s)) this.prevGesture[s] = null;
+
       if (pointer) {
         const b = this.pick(pointer.x, pointer.y); this.hover = b;
-        if (b && b === this.dwellBody) { this.dwell += dt; if (this.dwell >= DWELL) { this.dwell = 0; this.select(b); } } else { this.dwellBody = b; this.dwell = 0; }
+        if (b && b === this.dwellBody) { 
+          this.dwell += dt; 
+          if (this.dwell >= DWELL) { this.dwell = 0; this.select(b); } 
+        } else { 
+          this.dwellBody = b; this.dwell = 0; 
+        }
         return { side: pointer.side, progress: b ? Math.min(1, this.dwell / DWELL) : 0, hovering: !!b };
       }
-      this.dwell = 0; this.dwellBody = null; this.hover = null; return { side: null, progress: 0, hovering: false };
+
+      this.dwell = 0; this.dwellBody = null; this.hover = null; 
+      return { side: null, progress: 0, hovering: false };
     }
 
     /* ----- loop ----- */
@@ -651,14 +699,15 @@
       const m = this.map; if (!m || this.mode !== '3d') return;
       for (const h of frame.hands) {
         if (h.gesture === 'point') {
-          const c = m.center, k = (m.range || 1e6) / 111000 * 1.4, hd = ((m.heading || 0) * Math.PI) / 180;
+          const c = m.center, k = (m.range || 1e6) / 111000 * 3.5, hd = ((m.heading || 0) * Math.PI) / 180;
           const dx = h.delta.x * k, up = -h.delta.y * k, cs = Math.cos(hd), sn = Math.sin(hd);
           const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);
           m.center = { lat: Math.max(-85, Math.min(85, c.lat + dN)), lng: c.lng + dE / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180)), altitude: c.altitude || 0 };
         } else if (h.gesture === 'palm') {
-          m.heading = ((m.heading || 0) - h.delta.x * 220 + 360) % 360; m.tilt = Math.max(0, Math.min(80, (m.tilt || 0) + h.delta.y * 120));
+          m.heading = ((m.heading || 0) - h.delta.x * 350 + 360) % 360; m.tilt = Math.max(0, Math.min(80, (m.tilt || 0) + h.delta.y * 200));
         } else if (h.gesture === 'pinch') {
-          m.range = Math.max(200, Math.min(2.2e7, (m.range || 1e6) * Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.3)));
+          const factor = (h.side === 'left' ? -1 : 1) * dt * 3.5;
+          m.range = Math.max(200, Math.min(2.2e7, (m.range || 1e6) * Math.exp(factor)));
         } else if (h.gesture === 'fist') { m.heading = 0; m.tilt = 0; }
       }
     }
