@@ -1,4 +1,4 @@
-/* AirControl – 3D Universe mode (Three.js r128) + OpenLayers Canvas Earth Surface */
+/* AirControl – 3D Universe mode (Three.js r128) + OpenLayers Canvas Earth Surface with Search & Labels */
 (function () {
   const AC = (window.AC = window.AC || {});
   const { PI } = Math;
@@ -565,7 +565,6 @@
       let isTwoFingerEnter = false;
 
       for (const h of frame.hands) {
-        // TIME STOP / START TOGGLE (Left = Stop, Right = Start)
         if (h.gesture === 'palm' || h.gesture === 'open') {
           if (h.side === 'left') {
             this.isTimeStopped = true; 
@@ -575,7 +574,6 @@
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
         }
-        // TWO FINGERS GESTURE = Enter System / Land on Earth
         else if (h.gesture === 'victory' || h.gesture === 'peace' || h.fingerCount === 2) {
           isTwoFingerEnter = true;
           this.enterGestureFrames++;
@@ -675,7 +673,7 @@
   AC.UniverseMode = UniverseMode;
 })();
 
-/* ================== OpenLayers Earth Surface (City Labels + Strict 3-Finger Return) ================== */
+/* ================== OpenLayers Earth Surface (City Labels + Search Bar + 3-Finger Return) ================== */
 (function () {
   const AC = (window.AC = window.AC || {});
 
@@ -689,6 +687,73 @@
 
       const retBtn = document.getElementById('earth-return');
       if (retBtn) retBtn.onclick = () => this.close();
+
+      this._initSearch();
+    }
+
+    _initSearch() {
+      const input = document.getElementById('earth-search-input');
+      const resultsBox = document.getElementById('earth-search-results');
+      if (!input || !resultsBox) return;
+
+      let debounceTimer = null;
+
+      input.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        clearTimeout(debounceTimer);
+
+        if (query.length < 3) {
+          resultsBox.classList.add('hidden');
+          resultsBox.innerHTML = '';
+          return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+          try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+
+            resultsBox.innerHTML = '';
+            if (data && data.length > 0) {
+              data.slice(0, 5).forEach((place) => {
+                const item = document.createElement('div');
+                item.textContent = place.display_name;
+                item.onclick = () => {
+                  const lon = parseFloat(place.lon);
+                  const lat = parseFloat(place.lat);
+                  this.flyTo(lon, lat);
+                  input.value = place.display_name;
+                  resultsBox.classList.add('hidden');
+                };
+                resultsBox.appendChild(item);
+              });
+              resultsBox.classList.remove('hidden');
+            } else {
+              resultsBox.classList.add('hidden');
+            }
+          } catch (err) {
+            console.error('Search error:', err);
+          }
+        }, 300);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!document.getElementById('earth-search-box').contains(e.target)) {
+          resultsBox.classList.add('hidden');
+        }
+      });
+    }
+
+    flyTo(lon, lat, zoomLevel = 10) {
+      if (!this.map) return;
+      const view = this.map.getView();
+      const targetCoord = ol.proj.fromLonLat([lon, lat]);
+      
+      view.animate({
+        center: targetCoord,
+        zoom: zoomLevel,
+        duration: 1200
+      });
     }
 
     open() {
@@ -697,6 +762,11 @@
       document.body.classList.add('earth-open');
       this.mapEl.innerHTML = '';
       this.threeFingerFrames = 0;
+
+      const searchInput = document.getElementById('earth-search-input');
+      if (searchInput) searchInput.value = '';
+      const resultsBox = document.getElementById('earth-search-results');
+      if (resultsBox) resultsBox.classList.add('hidden');
 
       if (window.ol) {
         this.map = new ol.Map({
@@ -736,7 +806,6 @@
       this.threeFingerFrames = 0;
     }
 
-    /** Touchless Map Control with Hand Tracking */
     handleFrame(frame, dt) {
       if (!this.active || !this.map) return;
       const view = this.map.getView();
@@ -745,7 +814,6 @@
       let detectedThreeFingers = false;
 
       for (const h of frame.hands) {
-        // STRICT THREE FINGERS GESTURE = Return to Space
         const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
 
         if (isThree) {
