@@ -235,6 +235,7 @@
       this.atmos = [];
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
+      this.threeFingerReleased = true;
       this.ignoreGesturesUntil = 0;
     }
 
@@ -561,6 +562,7 @@
       this.hover = null;
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
+      this.threeFingerReleased = true;
       this.ignoreGesturesUntil = performance.now() + 1200;
       this.prevGesture = {};
       this._renderCard(null);
@@ -582,6 +584,7 @@
       this.hover = null;
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
+      this.threeFingerReleased = false; // Lock out 3-fingers until user opens/resets hand
       this.ignoreGesturesUntil = performance.now() + 1200;
       this.prevGesture = {};
       this._renderCard(null);
@@ -598,7 +601,6 @@
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
       
-      // Ignore hand gestures temporarily right after switching scopes to prevent stuck gesture state
       if (now < (this.ignoreGesturesUntil || 0)) {
         return { side: null, progress: 0, hovering: false };
       }
@@ -607,13 +609,19 @@
       let detectedThreeFingers = false;
 
       for (const h of frame.hands) {
-        // 1. THREE FINGERS GESTURE IN SYSTEM SCOPE (Return to Galaxy)
         const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
-        if (isThree && this.scope === 'system') {
+
+        if (!isThree) {
+          this.threeFingerReleased = true;
+        }
+
+        // 1. THREE FINGERS GESTURE IN SYSTEM SCOPE (Return to Galaxy)
+        if (isThree && this.scope === 'system' && this.threeFingerReleased) {
           detectedThreeFingers = true;
           this.threeFingerFrames++;
           if (this.threeFingerFrames >= 3 && (now - (this.lastGalaxyReturn || 0) > 800)) {
             this.lastGalaxyReturn = now;
+            this.threeFingerReleased = false; 
             this.exitToGalaxy();
             this.threeFingerFrames = 0;
             return;
