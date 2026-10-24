@@ -192,7 +192,7 @@
     float h(vec3 p){return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453);}
     float n3(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),
-                 mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}
+                 mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,0,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}
     void main(){ vec3 p=normalize(vO)*3.; float t=uTime*0.15;
       float n=n3(p*1.5+t)*.55+n3(p*3.5-t*1.3)*.3+n3(p*8.+t*2.)*.15;
       vec3 c=mix(vec3(.9,.25,.02),vec3(1.,.85,.35),n); c=mix(c,vec3(1.,.97,.8),smoothstep(.62,.9,n));
@@ -230,7 +230,7 @@
       this.ray = new THREE.Raycaster(); this.tmp = new THREE.Vector3(); this.clock = new THREE.Clock(false);
       this.view = this._defaultView('galaxy'); this.goal = this._defaultView('galaxy');
       this.focus = null; this.orbiters = []; this.t = 0;
-      this.pmats = []; // FIXED: Initialized particle materials array
+      this.pmats = [];
       this.atmos = [];
     }
 
@@ -265,7 +265,6 @@
         uniforms: { uTime: { value: 0 }, uPx: { value: this.px }, uMin: { value: min * this.px } } });
       const p = new THREE.Points(g, m); p.frustumCulled = false; 
       
-      // FIXED: Safe array push
       if (!this.pmats) this.pmats = [];
       this.pmats.push(m); 
       return p;
@@ -373,8 +372,9 @@
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }));
         sp.scale.set(s, s, 1); S.add(sp);
       });
-      const FN = 2400, fd = new Float32Array(FN * 3), fs = new Float32Array(FN), centers = Array.from({ length: 14 }, () => new THREE.Vector3().randomDirection());
-      for (let i = 0; i < FN; i++) { const d = centers[i % 14].clone().add(new THREE.Vector3().randomDirection().multiplyScalar(0.12)).normalize(); fd.set([d.x, d.y, d.z], i * 3); fs[i] = Math.random(); }
+      // FIXED: randomDirection() removed for Three.js r128 compatibility
+      const FN = 2400, fd = new Float32Array(FN * 3), fs = new Float32Array(FN), centers = Array.from({ length: 14 }, () => new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize());
+      for (let i = 0; i < FN; i++) { const d = centers[i % 14].clone().add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.12)).normalize(); fd.set([d.x, d.y, d.z], i * 3); fs[i] = Math.random(); }
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FN * 3), 3));
       fg.setAttribute('aDir', new THREE.BufferAttribute(fd, 3)); fg.setAttribute('aSeed', new THREE.BufferAttribute(fs, 1));
       this.flareMat = new THREE.ShaderMaterial({ vertexShader: FLARE_V, fragmentShader: FLARE_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -446,7 +446,7 @@
       }
       const ring = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c), side: THREE.DoubleSide, transparent: true, alphaTest: 0.1 }));
       ring.rotation.x = -PI / 2; ring.castShadow = true; ring.receiveShadow = true; planetMesh.add(ring);
-      planetMesh.rotation.z = 0.47; // tilt planet + rings together
+      planetMesh.rotation.z = 0.47;
     }
 
     _buildPost() {
@@ -539,7 +539,7 @@
       let pointer = null; const now = performance.now();
       for (const h of frame.hands) {
         if (h.gesture === 'palm') { this.goal.theta -= h.delta.x * 5.5; this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); }
-        else if (h.gesture === 'pinch') this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1)); // left pinch = in, right pinch = out
+        else if (h.gesture === 'pinch') this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1));
         else if (h.gesture === 'point') pointer = h;
         if (h.gesture === 'fist' && this.prevGesture[h.side] !== 'fist' && now - this.lastReset > 800) { this.lastReset = now; this.reset(); }
         this.prevGesture[h.side] = h.gesture;
@@ -650,14 +650,14 @@
     handleFrame(frame, dt) {
       const m = this.map; if (!m || this.mode !== '3d') return;
       for (const h of frame.hands) {
-        if (h.gesture === 'point') {                     // pan
+        if (h.gesture === 'point') {
           const c = m.center, k = (m.range || 1e6) / 111000 * 1.4, hd = ((m.heading || 0) * Math.PI) / 180;
           const dx = h.delta.x * k, up = -h.delta.y * k, cs = Math.cos(hd), sn = Math.sin(hd);
-          const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);   // drag the map with the hand
+          const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);
           m.center = { lat: Math.max(-85, Math.min(85, c.lat + dN)), lng: c.lng + dE / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180)), altitude: c.altitude || 0 };
-        } else if (h.gesture === 'palm') {                  // rotate & tilt
+        } else if (h.gesture === 'palm') {
           m.heading = ((m.heading || 0) - h.delta.x * 220 + 360) % 360; m.tilt = Math.max(0, Math.min(80, (m.tilt || 0) + h.delta.y * 120));
-        } else if (h.gesture === 'pinch') {                 // left in, right out
+        } else if (h.gesture === 'pinch') {
           m.range = Math.max(200, Math.min(2.2e7, (m.range || 1e6) * Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.3)));
         } else if (h.gesture === 'fist') { m.heading = 0; m.tilt = 0; }
       }
