@@ -233,6 +233,7 @@
       this.isTimeStopped = false; 
       this.pmats = [];
       this.atmos = [];
+      this.enterGestureFrames = 0;
     }
 
     _defaultView(scope) {
@@ -392,7 +393,6 @@
 
     _buildSystem() {
       const S = this.systemG;
-      // Sun
       this.sunMat = new THREE.ShaderMaterial({ vertexShader: SUN_V, fragmentShader: SUN_F, uniforms: { uTime: { value: 0 } } });
       const sun = new THREE.Mesh(new THREE.SphereGeometry(9, 64, 48), this.sunMat); S.add(sun);
       [[0xffb347, 36, 0.45], [0xff7a1a, 70, 0.15]].forEach(([c, s, o]) => {
@@ -412,14 +412,12 @@
         desc: 'The star at the heart of our solar system. Its surface churns with plasma and erupts in solar flares.', facts: [['Diameter', '1.39 M km'], ['Surface', '5,500 °C'], ['Age', '4.6 B yrs']] };
       S.add(sp); this.pickables.system.push(sp);
 
-      // LIGHTING FOR PLANETS
       this.sunLight = new THREE.PointLight(0xfff5e6, 3.8, 0, 0); this.sunLight.castShadow = true;
       this.sunLight.shadow.mapSize.set(2048, 2048); this.sunLight.shadow.camera.near = 12; this.sunLight.shadow.camera.far = 220;
       this.sunLight.shadow.bias = -0.0008; 
       
       S.add(this.sunLight, new THREE.AmbientLight(0x5a78c8, 1.4));
 
-      // Planets + orbit lines
       const holders = {};
       PLANETS.forEach((p, i) => {
         const pivot = new THREE.Object3D(); pivot.rotation.y = i * 1.3; S.add(pivot);
@@ -443,14 +441,12 @@
         if (p.rings) this._saturnRings(mesh, p);
       });
 
-      // Moons
       MOONS.forEach((m, i) => {
         const pivot = new THREE.Object3D(); pivot.rotation.y = i * 2.1; pivot.rotation.x = (i % 3) * 0.04; holders[m.parent].add(pivot);
         const h = new THREE.Object3D(); h.position.x = m.o; pivot.add(h);
         const mesh = this._body(m, h, true); this.orbiters.push({ pivot, sp: m.sp }, { spin: mesh, sp: 0.3 });
       });
 
-      // Asteroid belt
       const geo = new THREE.IcosahedronGeometry(1, 1), pa = geo.attributes.position;
       for (let i = 0; i < pa.count; i++) { const k = 0.7 + h3(Math.round(pa.getX(i) * 100), Math.round(pa.getY(i) * 100), Math.round(pa.getZ(i) * 100)) * 0.6; pa.setXYZ(i, pa.getX(i) * k, pa.getY(i) * k * 0.8, pa.getZ(i) * k); }
       geo.computeVertexNormals();
@@ -566,6 +562,8 @@
     /* ----- hand input ----- */
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
+      let isTwoFingerEnter = false;
+
       for (const h of frame.hands) {
         // TIME STOP / START TOGGLE (Left = Stop, Right = Start)
         if (h.gesture === 'palm' || h.gesture === 'open') {
@@ -577,14 +575,19 @@
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
         }
-        else if (h.gesture === 'pinch' || h.gesture === 'victory' || h.gesture === 'peace') {
-          if (this.selected && this.selected.action && now - (this.lastAction || 0) > 1000) {
+        // TWO FINGERS GESTURE = Enter System / Land on Earth
+        else if (h.gesture === 'victory' || h.gesture === 'peace' || h.fingerCount === 2) {
+          isTwoFingerEnter = true;
+          this.enterGestureFrames++;
+          if (this.enterGestureFrames >= 3 && this.selected && this.selected.action && now - (this.lastAction || 0) > 1000) {
             this.lastAction = now;
+            this.enterGestureFrames = 0;
             if (this.selected.kind === 'solar') this.enterSystem();
             else if (this.selected.id === 'earth') this.hooks.onLand && this.hooks.onLand();
-          } else {
-            this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1));
           }
+        }
+        else if (h.gesture === 'pinch') {
+          this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1));
         }
         else if (h.gesture === 'point') pointer = h;
 
@@ -594,6 +597,9 @@
         }
         this.prevGesture[h.side] = h.gesture;
       }
+
+      if (!isTwoFingerEnter) this.enterGestureFrames = 0;
+
       for (const s of ['left', 'right']) if (!frame.hands.find((h) => h.side === s)) this.prevGesture[s] = null;
 
       if (pointer) {
@@ -644,7 +650,6 @@
           d.a += d.w * effectiveDt; d.rx += d.tx * effectiveDt; d.ry += d.ty * effectiveDt; o.position.set(Math.cos(d.a) * d.r, d.y, Math.sin(d.a) * d.r); o.rotation.set(d.rx, d.ry, 0); o.scale.setScalar(d.s); o.updateMatrix(); this.belt.setMatrixAt(i, o.matrix);
         }); this.belt.instanceMatrix.needsUpdate = true;
       }
-      // hover ring
       const hb = this.hover || (this.dwellBody); if (hb && hb.obj) {
         hb.obj.getWorldPosition(this.hoverRing.position); const d = this.camera.position.distanceTo(this.hoverRing.position);
         this.hoverRing.scale.setScalar(Math.max(hb.pickR * 2.4, d * 0.035)); this.hoverRing.visible = true; this.hoverRing.material.rotation = t * 0.6;
@@ -670,7 +675,7 @@
   AC.UniverseMode = UniverseMode;
 })();
 
-/* ================== OpenLayers Earth Surface (With City Labels & 3-Finger Return Gesture) ================== */
+/* ================== OpenLayers Earth Surface (City Labels + Strict 3-Finger Return) ================== */
 (function () {
   const AC = (window.AC = window.AC || {});
 
@@ -680,6 +685,7 @@
       this.mapEl = document.getElementById('earth-map');
       this.active = false;
       this.map = null;
+      this.threeFingerFrames = 0;
 
       const retBtn = document.getElementById('earth-return');
       if (retBtn) retBtn.onclick = () => this.close();
@@ -690,20 +696,18 @@
       this.root.classList.remove('hidden');
       document.body.classList.add('earth-open');
       this.mapEl.innerHTML = '';
+      this.threeFingerFrames = 0;
 
       if (window.ol) {
-        // Hybrid Map Layer: Satellite + Place Names / Labels
         this.map = new ol.Map({
           target: this.mapEl,
           layers: [
-            // Base Satellite Layer
             new ol.layer.Tile({
               source: new ol.source.XYZ({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 maxZoom: 19
               })
             }),
-            // Hybrid Overlay Layer (Country, City & Place Names)
             new ol.layer.Tile({
               source: new ol.source.XYZ({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
@@ -712,7 +716,7 @@
             })
           ],
           view: new ol.View({
-            center: ol.proj.fromLonLat([77.2090, 28.6139]), // India Default View
+            center: ol.proj.fromLonLat([77.2090, 28.6139]),
             zoom: 4
           }),
           controls: []
@@ -729,6 +733,7 @@
         this.map = null;
       }
       this.mapEl.innerHTML = '';
+      this.threeFingerFrames = 0;
     }
 
     /** Touchless Map Control with Hand Tracking */
@@ -737,29 +742,31 @@
       const view = this.map.getView();
       const now = performance.now();
 
+      let detectedThreeFingers = false;
+
       for (const h of frame.hands) {
-        // THREE FINGERS GESTURE = Return to Space / Close Map
-        // Checked via 3-finger pose ('three' / '3' or finger count)
-        if (h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3) {
-          if (now - (this.lastClose || 0) > 1000) {
+        // STRICT THREE FINGERS GESTURE = Return to Space
+        const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
+
+        if (isThree) {
+          detectedThreeFingers = true;
+          this.threeFingerFrames++;
+
+          if (this.threeFingerFrames >= 3 && (now - (this.lastClose || 0) > 800)) {
             this.lastClose = now;
             this.close();
             return;
           }
         }
-
-        // Pinch Gestures = Zoom Control
         else if (h.gesture === 'pinch') {
           const currentZoom = view.getZoom();
           if (h.side === 'right') {
-            view.setZoom(Math.min(18, currentZoom + dt * 1.8)); // Right Pinch = Zoom In
+            view.setZoom(Math.min(18, currentZoom + dt * 2.2));
           } else if (h.side === 'left') {
-            view.setZoom(Math.max(2, currentZoom - dt * 1.8));  // Left Pinch = Zoom Out
+            view.setZoom(Math.max(2, currentZoom - dt * 2.2));
           }
         }
-
-        // Open Palm Gesture = Map Pan / Explore Movement
-        else if (h.gesture === 'palm' || h.gesture === 'open') {
+        else if (h.gesture === 'palm' || h.gesture === 'open' || h.fingerCount >= 4) {
           const center = view.getCenter();
           const resolution = view.getResolution();
           const moveSpeed = resolution * 450;
@@ -771,6 +778,10 @@
 
           view.setCenter(newCenter);
         }
+      }
+
+      if (!detectedThreeFingers) {
+        this.threeFingerFrames = 0;
       }
     }
   }
