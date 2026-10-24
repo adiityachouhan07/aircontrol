@@ -550,14 +550,45 @@
       e.card.style.animation = 'none'; void e.card.offsetWidth; e.card.style.animation = '';
     }
     enterSystem() {
-      this.scope = 'system'; this.galaxyG.visible = false; this.systemG.visible = true; this.selected = null; this.focus = null; this._renderCard(null);
-      this.view = this._defaultView('system'); this.view.radius = 420; this.goal = this._defaultView('system');
-      this.el.scope.textContent = 'Solar System'; this.el.back.classList.remove('hidden'); this.hooks.onScope && this.hooks.onScope('system');
+      this.scope = 'system'; 
+      this.galaxyG.visible = false; 
+      this.systemG.visible = true; 
+      this.selected = null; 
+      this.focus = null; 
+      this.dwell = 0;
+      this.dwellBody = null;
+      this.hover = null;
+      this.enterGestureFrames = 0;
+      this.threeFingerFrames = 0;
+      this.prevGesture = {};
+      this._renderCard(null);
+      this.view = this._defaultView('system'); 
+      this.view.radius = 420; 
+      this.goal = this._defaultView('system');
+      this.el.scope.textContent = 'Solar System'; 
+      this.el.back.classList.remove('hidden'); 
+      this.hooks.onScope && this.hooks.onScope('system');
     }
     exitToGalaxy() {
-      this.scope = 'galaxy'; this.galaxyG.visible = true; this.systemG.visible = false; this.selected = null; this.focus = null; this._renderCard(null);
-      this.view = this._defaultView('galaxy'); this.view.target.copy(SOLAR_POS); this.view.radius = 140; this.goal = this._defaultView('galaxy');
-      this.el.scope.textContent = 'Milky Way'; this.el.back.classList.add('hidden'); this.hooks.onScope && this.hooks.onScope('galaxy');
+      this.scope = 'galaxy'; 
+      this.galaxyG.visible = true; 
+      this.systemG.visible = false; 
+      this.selected = null; 
+      this.focus = null; 
+      this.dwell = 0;
+      this.dwellBody = null;
+      this.hover = null;
+      this.enterGestureFrames = 0;
+      this.threeFingerFrames = 0;
+      this.prevGesture = {};
+      this._renderCard(null);
+      this.view = this._defaultView('galaxy'); 
+      this.view.target.copy(SOLAR_POS); 
+      this.view.radius = 140; 
+      this.goal = this._defaultView('galaxy');
+      this.el.scope.textContent = 'Milky Way'; 
+      this.el.back.classList.add('hidden'); 
+      this.hooks.onScope && this.hooks.onScope('galaxy');
     }
 
     /* ----- hand input ----- */
