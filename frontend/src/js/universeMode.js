@@ -563,7 +563,7 @@
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
       this.threeFingerReleased = true;
-      this.ignoreGesturesUntil = performance.now() + 1200;
+      this.ignoreGesturesUntil = performance.now() + 1000;
       this.prevGesture = {};
       this._renderCard(null);
       this.view = this._defaultView('system'); 
@@ -584,8 +584,8 @@
       this.hover = null;
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
-      this.threeFingerReleased = false; // Lock out 3-fingers until user opens/resets hand
-      this.ignoreGesturesUntil = performance.now() + 1200;
+      this.threeFingerReleased = false; 
+      this.ignoreGesturesUntil = performance.now() + 1000;
       this.prevGesture = {};
       this._renderCard(null);
       this.view = this._defaultView('galaxy'); 
@@ -628,8 +628,10 @@
           }
         }
 
-        // 2. TIME STOP / START TOGGLE (Left = Stop, Right = Start)
-        if (h.gesture === 'palm' || h.gesture === 'open') {
+        // 2. ROTATION / EXPLORE GESTURE (Palm, Open, OR 3-fingers in Galaxy view to prevent any freeze)
+        const isRotationGesture = h.gesture === 'palm' || h.gesture === 'open' || (this.scope === 'galaxy' && isThree);
+
+        if (isRotationGesture) {
           if (h.side === 'left') {
             this.isTimeStopped = true; 
           } else if (h.side === 'right') {
