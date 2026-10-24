@@ -230,7 +230,7 @@
       this.ray = new THREE.Raycaster(); this.tmp = new THREE.Vector3(); this.clock = new THREE.Clock(false);
       this.view = this._defaultView('galaxy'); this.goal = this._defaultView('galaxy');
       this.focus = null; this.orbiters = []; this.t = 0;
-      this.isTimeStopped = false; // State flag to toggle stop/start
+      this.isTimeStopped = false; 
       this.pmats = [];
       this.atmos = [];
     }
@@ -570,9 +570,9 @@
         // TIME STOP / START TOGGLE (Left = Stop, Right = Start)
         if (h.gesture === 'palm' || h.gesture === 'open') {
           if (h.side === 'left') {
-            this.isTimeStopped = true; // Freeze time completely
+            this.isTimeStopped = true; 
           } else if (h.side === 'right') {
-            this.isTimeStopped = false; // Resume time
+            this.isTimeStopped = false; 
           }
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
@@ -670,7 +670,7 @@
   AC.UniverseMode = UniverseMode;
 })();
 
-/* ================== OpenLayers Earth Surface (Direct Canvas - Hand Gestures Enabled) ================== */
+/* ================== OpenLayers Earth Surface (With City Labels & 3-Finger Return Gesture) ================== */
 (function () {
   const AC = (window.AC = window.AC || {});
 
@@ -691,20 +691,28 @@
       document.body.classList.add('earth-open');
       this.mapEl.innerHTML = '';
 
-      // Direct Canvas Map (No iframe security blocking hand tracking)
       if (window.ol) {
+        // Hybrid Map Layer: Satellite + Place Names / Labels
         this.map = new ol.Map({
           target: this.mapEl,
           layers: [
+            // Base Satellite Layer
             new ol.layer.Tile({
               source: new ol.source.XYZ({
                 url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                 maxZoom: 19
               })
+            }),
+            // Hybrid Overlay Layer (Country, City & Place Names)
+            new ol.layer.Tile({
+              source: new ol.source.XYZ({
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+                maxZoom: 19
+              })
             })
           ],
           view: new ol.View({
-            center: ol.proj.fromLonLat([77.2090, 28.6139]),
+            center: ol.proj.fromLonLat([77.2090, 28.6139]), // India Default View
             zoom: 4
           }),
           controls: []
@@ -730,8 +738,9 @@
       const now = performance.now();
 
       for (const h of frame.hands) {
-        // Two Fingers (Victory / Peace) = Close Map & Return to Universe
-        if (h.gesture === 'victory' || h.gesture === 'peace') {
+        // THREE FINGERS GESTURE = Return to Space / Close Map
+        // Checked via 3-finger pose ('three' / '3' or finger count)
+        if (h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3) {
           if (now - (this.lastClose || 0) > 1000) {
             this.lastClose = now;
             this.close();
