@@ -1,134 +1,614 @@
-/* ==========================================
-   AirControl – Global Styles & Layouts
-   ========================================== */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body, html { width: 100%; height: 100%; overflow: hidden; background: #01030a; font-family: 'Sora', sans-serif; color: #fff; }
+/* AirControl – Presenter mode: PDF/PPT slides + live gesture annotations + Auto-Shape + Thumbs Up/Down Fullscreen */
+(function () {
+  const AC = (window.AC = window.AC || {});
+  const COLORS = ['#3d7bff', '#5ee7ff', '#ffffff', '#ff4d6d', '#ffd23f', '#3ddc84', '#b06bff', '#ff9f43'];
+  const TOOL_BY_GESTURE = { point: 'pen', peace: 'laser', three: 'highlight', palm: 'erase' };
+  const TOOL_LABEL = { pen: 'Pen', laser: 'Laser', highlight: 'Highlighter', erase: 'Eraser', none: 'Ready' };
 
-/* Glassmorphism Effect */
-.glass {
-  background: rgba(13, 25, 48, 0.75);
-  border: 1px solid rgba(94, 231, 255, 0.3);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-/* Topbar Header */
-#topbar {
-  position: absolute; top: 16px; left: 20px; right: 20px; z-index: 100;
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 24px; border-radius: 16px;
-}
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; color: #5ee7ff; }
-.brand-dot { width: 10px; height: 10px; background: #5ee7ff; border-radius: 50%; box-shadow: 0 0 10px #5ee7ff; }
+  /* ---- Shape Recognition Logic ---- */
+  function findCorners(points) {
+    const corners = [];
+    const step = Math.max(2, Math.floor(points.length / 12));
 
-#mode-tabs { display: flex; gap: 8px; }
-.tab {
-  background: transparent; border: 1px solid rgba(94, 231, 255, 0.2); color: #a4b8d9;
-  padding: 8px 18px; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 500; transition: 0.2s;
-}
-.tab.active, .tab:hover { background: rgba(61, 123, 255, 0.3); border-color: rgba(94, 231, 255, 0.6); color: #fff; }
+    for (let i = step; i < points.length - step; i += step) {
+      const pPrev = points[i - step];
+      const pCurr = points[i];
+      const pNext = points[i + step];
 
-.status { display: flex; align-items: center; gap: 12px; }
-.pill { padding: 6px 14px; border-radius: 20px; font-size: 13px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
-.pill.off { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.3); }
+      const a1 = Math.atan2(pCurr.y - pPrev.y, pCurr.x - pPrev.x);
+      const a2 = Math.atan2(pNext.y - pCurr.y, pNext.x - pCurr.x);
+      let diff = Math.abs(a1 - a2);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
 
-.btn-glow {
-  background: #3d7bff; border: 1px solid rgba(94, 231, 255, 0.6); color: #fff;
-  padding: 8px 18px; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600;
-  box-shadow: 0 0 15px rgba(61, 123, 255, 0.4); transition: 0.2s;
-}
-.btn-glow:hover { background: #528bff; box-shadow: 0 0 20px rgba(94, 231, 255, 0.6); }
+      if (diff > 0.75) {
+        if (corners.length === 0 || Math.hypot(pCurr.x - corners[corners.length - 1].x, pCurr.y - corners[corners.length - 1].y) > 25) {
+          corners.push(pCurr);
+        }
+      }
+    }
+    return corners;
+  }
 
-/* Mode Roots */
-.mode-root { position: absolute; inset: 0; }
-.mode-root.hidden { display: none !important; }
+  function recognizeShape(points) {
+    if (!points || points.length < 8) return null;
 
-/* Universe Mode Elements */
-#universe-canvas { width: 100%; height: 100%; display: block; }
-#uni-breadcrumb { position: absolute; top: 90px; left: 20px; z-index: 50; padding: 10px 20px; border-radius: 12px; font-size: 14px; display: flex; gap: 12px; align-items: center; }
-#btn-back-galaxy { background: none; border: none; color: #5ee7ff; cursor: pointer; font-family: inherit; font-weight: 600; }
-#btn-back-galaxy.hidden { display: none; }
+    const N = points.length;
+    const start = points[0];
+    const end = points[N - 1];
 
-#gesture-help { position: absolute; bottom: 20px; left: 20px; z-index: 50; padding: 16px 20px; border-radius: 14px; font-size: 13px; line-height: 1.6; color: #a4b8d9; }
-#gesture-help b { color: #fff; }
-#gesture-help .muted { margin-top: 6px; font-size: 11px; color: #6c8cb8; }
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const startEndDist = Math.hypot(dx, dy);
 
-/* Celestial Body Info Card */
-#body-card { position: absolute; bottom: 30px; right: 30px; width: 340px; padding: 24px; border-radius: 18px; z-index: 60; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-#body-card.hidden { display: none; }
-#body-card h2 { font-size: 24px; color: #fff; margin-bottom: 2px; }
-#body-card .muted { font-size: 12px; color: #5ee7ff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
-#body-card p { font-size: 13px; color: #a4b8d9; line-height: 1.5; margin-bottom: 16px; }
-#body-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; font-size: 12px; }
-#body-card dt { color: #6c8cb8; }
-#body-card dd { color: #fff; font-weight: 600; text-align: right; }
-.card-actions { display: flex; gap: 10px; }
-.icon-btn { position: absolute; top: 16px; right: 16px; background: none; border: none; color: #a4b8d9; font-size: 20px; cursor: pointer; }
+    let pathLength = 0;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-/* Earth Surface View (OpenLayers Map) */
-#earth-view { position: absolute; inset: 0; background: #000; z-index: 80; display: flex; flex-direction: column; }
-#earth-view.hidden { display: none !important; }
-#earth-map { width: 100%; height: 100%; }
-#earth-return { position: absolute; top: 20px; right: 20px; z-index: 90; }
-#earth-help { position: absolute; bottom: 20px; right: 20px; z-index: 90; padding: 14px 18px; border-radius: 12px; font-size: 12px; line-height: 1.5; }
+    for (let i = 0; i < N; i++) {
+      const p = points[i];
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
 
-/* Presenter Mode Elements */
-#stage { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #050b18; overflow: hidden; }
-#stage canvas { position: absolute; display: block; }
-.edge { position: absolute; top: 0; bottom: 0; width: 80px; z-index: 30; cursor: pointer; }
-#edge-prev { left: 0; }
-#edge-next { right: 0; }
+      if (i > 0) {
+        pathLength += Math.hypot(p.x - points[i - 1].x, p.y - points[i - 1].y);
+      }
+    }
 
-#toolbar { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 16px; padding: 12px 20px; border-radius: 16px; }
-.tool-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: rgba(255,255,255,0.08); border-radius: 8px; cursor: pointer; color: #5ee7ff; transition: 0.2s; }
-.tool-btn:hover { background: rgba(61,123,255,0.4); }
-#swatches { display: flex; gap: 8px; }
-.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: 0.2s; }
-.swatch.active { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 10px rgba(255,255,255,0.6); }
-#thickness { accent-color: #5ee7ff; cursor: pointer; }
+    const width = maxX - minX;
+    const height = maxY - minY;
+    if (width < 10 && height < 10) return null;
 
-#pres-indicator { position: absolute; bottom: 24px; right: 24px; z-index: 50; padding: 10px 18px; border-radius: 12px; font-size: 13px; display: flex; gap: 12px; }
-#toast { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); z-index: 100; padding: 10px 24px; border-radius: 12px; font-size: 14px; color: #5ee7ff; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-#toast.hidden { display: none; }
+    const isClosed = startEndDist < pathLength * 0.32;
 
-/* Hand Cursors & Bottom-Right Camera Preview */
-.hand-cursor { position: absolute; width: 48px; height: 48px; pointer-events: none; z-index: 1000; transform: translate(-50%, -50%); }
-.hand-cursor.hidden { display: none; }
-.hand-cursor .ring { fill: none; stroke: #5ee7ff; stroke-width: 2.5; stroke-dasharray: 125; stroke-dashoffset: 0; transition: stroke-dashoffset 0.1s linear; }
+    if (startEndDist / pathLength > 0.86 && !isClosed) {
+      return { type: 'line', start, end };
+    }
 
-#cam-preview { position: absolute; bottom: 20px; right: 20px; width: 180px; height: 120px; border-radius: 14px; overflow: hidden; z-index: 100; border: 1px solid rgba(94,231,255,0.3); }
-#cam-preview.hidden { display: none; }
-#cam-video, #cam-overlay { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); position: absolute; inset: 0; }
+    if (!isClosed) return null;
 
-/* ==========================================
-   Presenter Fullscreen & Floating FaceCam 
-   ========================================== */
-body.presenter-fullscreen #presenter-root {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  width: 100vw;
-  height: 100vh;
-  background: #000;
-}
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const aspectRatio = width / height;
 
-#presenter-facecam {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 220px;
-  height: 140px;
-  border-radius: 16px;
-  overflow: hidden;
-  z-index: 10000;
-  border: 2px solid rgba(94, 231, 255, 0.6);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
-  transition: all 0.3s ease;
-}
-#presenter-facecam.hidden { display: none !important; }
-#presenter-facecam video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scaleX(-1);
-}
+    if (aspectRatio > 0.65 && aspectRatio < 1.45) {
+      let totalR = 0;
+      for (let i = 0; i < N; i++) {
+        totalR += Math.hypot(points[i].x - centerX, points[i].y - centerY);
+      }
+      const avgR = totalR / N;
+      let variance = 0;
+      for (let i = 0; i < N; i++) {
+        variance += Math.pow(Math.hypot(points[i].x - centerX, points[i].y - centerY) - avgR, 2);
+      }
+      const stdDev = Math.sqrt(variance / N);
+
+      if (stdDev / avgR < 0.25) {
+        return { type: 'circle', center: { x: centerX, y: centerY }, radius: avgR };
+      }
+    }
+
+    const corners = findCorners(points);
+
+    if (corners.length === 3) {
+      return { type: 'triangle', corners };
+    } else if (corners.length === 4 || (corners.length >= 4 && corners.length <= 6)) {
+      return { type: 'rectangle', minX, minY, width, height };
+    }
+
+    return null;
+  }
+
+  /* ---- slide sources ---- */
+  function demoDeck() {
+    const slides = [
+      ['AirControl Presenter', 'Draw, point and navigate with your hands', ['☝ One finger — pen', '✌ Two fingers — laser pointer', '3 fingers — highlighter', '✋ Open palm — eraser', '👍 Thumbs Up — Fullscreen + FaceCam', '👎 Thumbs Down — Exit Fullscreen']],
+      ['Upload your deck', 'PDF, PPT or PPTX', ['Use the upload button at the top-left', 'PowerPoint files are converted on the server', 'Annotations are kept per slide']],
+      ['Keyboard & mouse work too', 'Every gesture has a fallback', ['P pen · L laser · H highlighter · E eraser', '← → change slide · C clears the slide', 'Click and drag to draw']],
+    ];
+    return {
+      count: slides.length,
+      async getPage(n) {
+        const [t, sub, lines] = slides[n - 1];
+        return {
+          size: { w: 1600, h: 900 },
+          async render(ctx, s) {
+            ctx.save();
+            ctx.scale(s, s);
+            const g = ctx.createLinearGradient(0, 0, 1600, 900);
+            g.addColorStop(0, '#0b1a3d');
+            g.addColorStop(1, '#122a66');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 1600, 900);
+            ctx.fillStyle = 'rgba(94,231,255,.07)';
+            ctx.beginPath();
+            ctx.arc(1350, 160, 380, 0, 7);
+            ctx.fill();
+            ctx.fillStyle = '#eaf2ff';
+            ctx.font = '600 92px Sora, system-ui, sans-serif';
+            ctx.fillText(t, 110, 260);
+            ctx.fillStyle = '#7fb0ff';
+            ctx.font = '300 44px Sora, system-ui, sans-serif';
+            ctx.fillText(sub, 110, 335);
+            ctx.fillStyle = '#cfe0ff';
+            ctx.font = '300 42px Sora, system-ui, sans-serif';
+            lines.forEach((l, i) => ctx.fillText(l, 110, 490 + i * 78));
+            ctx.restore();
+          }
+        };
+      }
+    };
+  }
+
+  function pdfDeck(pdf) {
+    return {
+      count: pdf.numPages,
+      async getPage(n) {
+        const p = await pdf.getPage(n);
+        const v = p.getViewport({ scale: 1 });
+        return {
+          size: { w: v.width, h: v.height },
+          async render(ctx, s) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            await p.render({
+              canvasContext: ctx,
+              viewport: p.getViewport({ scale: s })
+            }).promise;
+          }
+        };
+      }
+    };
+  }
+
+  class PresenterMode {
+    constructor() {
+      const $ = (id) => document.getElementById(id);
+      this.stage = $('stage');
+      this.slide = $('slide-canvas');
+      this.ann = $('ann-canvas');
+      this.live = $('live-canvas');
+      this.fx = $('fx-canvas');
+      this.pageInd = $('page-ind');
+      this.toolInd = $('tool-ind');
+      this.toastEl = $('toast');
+      this.thick = $('thickness');
+      this.faceCam = $('presenter-facecam');
+      this.faceVideo = $('presenter-face-video');
+      this.doc = demoDeck();
+      this.page = 1;
+      this.store = {};
+      this.tok = 0;
+      this.dpr = 1;
+      this.color = COLORS[0];
+      this.tool = 'none';
+      this.mouseTool = 'pen';
+      this.last = null;
+      this.trail = [];
+      this.strokeBuffer = [];
+      this.activeSide = null;
+      this.mouseDown = false;
+      this.isFullscreen = false;
+      this.lastFullscreenToggle = 0;
+      this._buildToolbar();
+      this._bindInput();
+    }
+
+    _buildToolbar() {
+      const sw = document.getElementById('swatches');
+      COLORS.forEach((c, i) => {
+        const b = document.createElement('button');
+        b.className = 'swatch' + (i === 0 ? ' active' : '');
+        b.style.background = c;
+        b.style.color = c;
+        b.title = c;
+        b.setAttribute('aria-label', 'Color ' + c);
+        b.onclick = () => {
+          this.color = c;
+          sw.querySelectorAll('.swatch').forEach((x) => x.classList.toggle('active', x === b));
+        };
+        sw.appendChild(b);
+      });
+      document.getElementById('file-input').addEventListener('change', (e) => {
+        const f = e.target.files[0];
+        if (f) this.upload(f);
+        e.target.value = '';
+      });
+    }
+
+    _bindInput() {
+      document.getElementById('edge-prev').onclick = () => this.go(-1);
+      document.getElementById('edge-next').onclick = () => this.go(1);
+      const s = this.stage;
+      s.addEventListener('pointerdown', (e) => {
+        if (e.target.classList.contains('edge')) return;
+        this.mouseDown = true;
+        s.setPointerCapture(e.pointerId);
+        this._mouse(e);
+      });
+      s.addEventListener('pointermove', (e) => {
+        if (this.mouseDown || this.mouseTool === 'laser') this._mouse(e);
+      });
+      s.addEventListener('pointerup', () => {
+        this.mouseDown = false;
+        this._release();
+        this._clearFx();
+      });
+      window.addEventListener('resize', () => this.active && this._debounceShow());
+    }
+
+    /* ---- Fullscreen & Floating FaceCam Toggle ---- */
+    toggleFullscreen(enable) {
+      const now = performance.now();
+      if (now - this.lastFullscreenToggle < 1200) return;
+      this.lastFullscreenToggle = now;
+
+      if (enable && !this.isFullscreen) {
+        this.isFullscreen = true;
+        document.body.classList.add('presenter-fullscreen');
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+        this._enableFaceCam();
+        this.toast('Fullscreen Mode · Thumbs Up', 1200);
+      } else if (!enable && this.isFullscreen) {
+        this.isFullscreen = false;
+        document.body.classList.remove('presenter-fullscreen');
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+        this._disableFaceCam();
+        this.toast('Exited Fullscreen · Thumbs Down', 1200);
+      }
+      setTimeout(() => this._debounceShow(), 200);
+    }
+
+    _enableFaceCam() {
+      if (!this.faceCam || !this.faceVideo) return;
+      const mainCamVideo = document.getElementById('cam-video');
+      if (mainCamVideo && mainCamVideo.srcObject) {
+        this.faceVideo.srcObject = mainCamVideo.srcObject;
+        this.faceCam.classList.remove('hidden');
+      }
+    }
+
+    _disableFaceCam() {
+      if (this.faceCam) {
+        this.faceCam.classList.add('hidden');
+      }
+    }
+
+    _debounceShow() {
+      clearTimeout(this._rt);
+      this._rt = setTimeout(() => this.show(this.page), 150);
+    }
+
+    _mouse(e) {
+      const t = this.mouseTool;
+      this._apply(t === 'laser' || this.mouseDown ? t : 'none', e.clientX, e.clientY, 'mouse');
+    }
+
+    activate() {
+      this.active = true;
+      this.show(this.page);
+    }
+
+    deactivate() {
+      this.active = false;
+      this.toggleFullscreen(false);
+      this._release();
+      this._clearFx();
+    }
+
+    /* ---- rendering ---- */
+    async show(n) {
+      this._release();
+      this._saveAnn();
+      const tok = ++this.tok;
+      this.page = Math.min(this.doc.count, Math.max(1, n));
+      const pg = await this.doc.getPage(this.page);
+      if (tok !== this.tok) return;
+      const maxW = this.stage.clientWidth * 0.94 - 70;
+      const maxH = this.stage.clientHeight * 0.94;
+      const fit = Math.min(maxW / pg.size.w, maxH / pg.size.h);
+      const cw = Math.round(pg.size.w * fit);
+      const ch = Math.round(pg.size.h * fit);
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      [this.slide, this.ann, this.live, this.fx].forEach((c) => {
+        c.width = Math.round(cw * this.dpr);
+        c.height = Math.round(ch * this.dpr);
+        c.style.width = cw + 'px';
+        c.style.height = ch + 'px';
+      });
+      await pg.render(this.slide.getContext('2d'), fit * this.dpr);
+      if (tok !== this.tok) return;
+      const saved = this.store[this.page];
+      if (saved) this.ann.getContext('2d').drawImage(saved, 0, 0, this.ann.width, this.ann.height);
+      this.pageInd.textContent = `${this.page} / ${this.doc.count}`;
+    }
+
+    _saveAnn() {
+      if (!this.ann.width) return;
+      const c = document.createElement('canvas');
+      c.width = this.ann.width;
+      c.height = this.ann.height;
+      c.getContext('2d').drawImage(this.ann, 0, 0);
+      this.store[this.page] = c;
+    }
+
+    go(d) {
+      if (this.page + d < 1 || this.page + d > this.doc.count) return;
+      this.show(this.page + d);
+    }
+
+    clearPage() {
+      this.ann.getContext('2d').clearRect(0, 0, this.ann.width, this.ann.height);
+      delete this.store[this.page];
+    }
+
+    async upload(file) {
+      this.toast(`Uploading ${file.name}…`, 20000);
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        const pdf = await pdfjsLib.getDocument(data.url).promise;
+        this.doc = pdfDeck(pdf);
+        this.store = {};
+        await this.show(1);
+        this.toast(`${data.name} · ${pdf.numPages} slides`);
+      } catch (e) {
+        this.toast(e.message || 'Upload failed', 5000);
+      }
+    }
+
+    toast(msg, ms = 2600) {
+      this.toastEl.textContent = msg;
+      this.toastEl.classList.remove('hidden');
+      clearTimeout(this._tt);
+      this._tt = setTimeout(() => this.toastEl.classList.add('hidden'), ms);
+    }
+
+    /* ---- gesture input ---- */
+    handleFrame(frame) {
+      // 1. THUMBS UP / DOWN FULLSCREEN GESTURES
+      for (const h of frame.hands) {
+        if (h.gesture === 'thumb_up' || h.gesture === 'thumbs_up') {
+          this.toggleFullscreen(true);
+          return;
+        } else if (h.gesture === 'thumb_down' || h.gesture === 'thumbs_down') {
+          this.toggleFullscreen(false);
+          return;
+        }
+      }
+
+      // 2. SLIDE SWIPE
+      if (frame.swipe) {
+        this._release();
+        this.go(frame.swipe === 'left' ? 1 : -1);
+        this.toast(frame.swipe === 'left' ? 'Next slide' : 'Previous slide', 900);
+        return;
+      }
+
+      // 3. ANNOTATION TOOLS
+      const cands = frame.hands.filter((h) => TOOL_BY_GESTURE[h.gesture]);
+      let h = cands.find((c) => c.side === this.activeSide)
+        || cands.find((c) => c.side === 'right')
+        || cands[0];
+
+      if (!h || frame.swipeRecent) {
+        this.activeSide = null;
+        this._release();
+        this._setTool('none');
+        this._clearFx();
+        return;
+      }
+
+      this.activeSide = h.side;
+      this._apply(TOOL_BY_GESTURE[h.gesture], h.x, h.y, 'hand');
+    }
+
+    noHands() {
+      this._release();
+      this._setTool('none');
+      this._clearFx();
+      this.activeSide = null;
+    }
+
+    _setTool(t) {
+      if (t !== this.tool) {
+        this._release();
+        this.tool = t;
+        this.toolInd.textContent = TOOL_LABEL[t];
+      }
+    }
+
+    _toCanvas(x, y) {
+      const r = this.slide.getBoundingClientRect();
+      const px = (x - r.left) / r.width;
+      const py = (y - r.top) / r.height;
+      return {
+        x: px * this.ann.width,
+        y: py * this.ann.height,
+        inside: px >= 0 && px <= 1 && py >= 0 && py <= 1
+      };
+    }
+
+    _apply(tool, cx, cy, src) {
+      this._setTool(tool);
+      const p = this._toCanvas(cx, cy);
+      const d = this.dpr;
+      const w = +this.thick.value * d;
+      const fx = this.fx.getContext('2d');
+      fx.clearRect(0, 0, this.fx.width, this.fx.height);
+
+      if (!p.inside || tool === 'none') {
+        this._release();
+        return;
+      }
+
+      const a = this.ann.getContext('2d');
+      const l = this.live.getContext('2d');
+
+      if (tool === 'pen') {
+        this.strokeBuffer.push(p);
+
+        l.strokeStyle = this.color;
+        l.lineWidth = w;
+        l.lineCap = l.lineJoin = 'round';
+        l.beginPath();
+        l.moveTo((this.last || p).x, (this.last || p).y);
+        l.lineTo(p.x, p.y);
+        l.stroke();
+        this.last = p;
+
+        fx.fillStyle = this.color;
+        fx.beginPath();
+        fx.arc(p.x, p.y, w / 2 + 3 * d, 0, 7);
+        fx.globalAlpha = 0.5;
+        fx.fill();
+        fx.globalAlpha = 1;
+      } else if (tool === 'highlight') {
+        this.live.style.opacity = 0.38;
+        l.strokeStyle = this.color;
+        l.lineWidth = w * 4.5;
+        l.lineCap = l.lineJoin = 'round';
+        l.beginPath();
+        l.moveTo((this.last || p).x, (this.last || p).y);
+        l.lineTo(p.x, p.y);
+        l.stroke();
+        this.last = p;
+        this.hl = true;
+      } else if (tool === 'erase') {
+        const r = Math.max(46, w * 3) * 1;
+        a.globalCompositeOperation = 'destination-out';
+        a.beginPath();
+        a.arc(p.x, p.y, r, 0, 7);
+        a.fill();
+        a.globalCompositeOperation = 'source-over';
+        fx.strokeStyle = 'rgba(94,231,255,.8)';
+        fx.lineWidth = 2 * d;
+        fx.beginPath();
+        fx.arc(p.x, p.y, r, 0, 7);
+        fx.stroke();
+        this.last = null;
+      } else if (tool === 'laser') {
+        this.trail.push({ x: p.x, y: p.y });
+        if (this.trail.length > 16) this.trail.shift();
+        this.trail.forEach((t, i) => {
+          const k = (i + 1) / this.trail.length;
+          fx.fillStyle = `rgba(94,231,255,${0.25 * k})`;
+          fx.beginPath();
+          fx.arc(t.x, t.y, 5 * d * k, 0, 7);
+          fx.fill();
+        });
+        const g = fx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 26 * d);
+        g.addColorStop(0, 'rgba(255,255,255,1)');
+        g.addColorStop(0.18, 'rgba(120,200,255,.95)');
+        g.addColorStop(0.5, 'rgba(61,123,255,.35)');
+        g.addColorStop(1, 'rgba(61,123,255,0)');
+        fx.fillStyle = g;
+        fx.beginPath();
+        fx.arc(p.x, p.y, 26 * d, 0, 7);
+        fx.fill();
+      }
+
+      if (tool !== 'laser') this.trail = [];
+    }
+
+    _release() {
+      this.last = null;
+      const d = this.dpr;
+      const w = +this.thick.value * d;
+
+      if (this.strokeBuffer.length > 0) {
+        const a = this.ann.getContext('2d');
+        const shape = recognizeShape(this.strokeBuffer);
+
+        a.globalCompositeOperation = 'source-over';
+        a.strokeStyle = a.fillStyle = this.color;
+        a.lineWidth = w;
+        a.lineCap = a.lineJoin = 'round';
+        a.beginPath();
+
+        if (shape) {
+          switch (shape.type) {
+            case 'line':
+              a.moveTo(shape.start.x, shape.start.y);
+              a.lineTo(shape.end.x, shape.end.y);
+              break;
+            case 'circle':
+              a.arc(shape.center.x, shape.center.y, shape.radius, 0, Math.PI * 2);
+              break;
+            case 'rectangle':
+              a.rect(shape.minX, shape.minY, shape.width, shape.height);
+              break;
+            case 'triangle':
+              a.moveTo(shape.corners[0].x, shape.corners[0].y);
+              a.lineTo(shape.corners[1].x, shape.corners[1].y);
+              a.lineTo(shape.corners[2].x, shape.corners[2].y);
+              a.closePath();
+              break;
+          }
+          a.stroke();
+        } else {
+          a.drawImage(this.live, 0, 0);
+        }
+
+        this.live.getContext('2d').clearRect(0, 0, this.live.width, this.live.height);
+        this.strokeBuffer = [];
+      }
+
+      if (this.hl) {
+        const a = this.ann.getContext('2d');
+        a.globalAlpha = 0.38;
+        a.drawImage(this.live, 0, 0);
+        a.globalAlpha = 1;
+        this.live.getContext('2d').clearRect(0, 0, this.live.width, this.live.height);
+        this.hl = false;
+      }
+    }
+
+    _clearFx() {
+      this.trail = [];
+      this.fx.getContext('2d').clearRect(0, 0, this.fx.width, this.fx.height);
+    }
+
+    handleKey(e) {
+      const k = e.key.toLowerCase();
+      if (['arrowright', 'pagedown', ' '].includes(k)) {
+        this.go(1);
+        e.preventDefault();
+      } else if (['arrowleft', 'pageup'].includes(k)) {
+        this.go(-1);
+      } else if (k === 'home') {
+        this.show(1);
+      } else if (k === 'end') {
+        this.show(this.doc.count);
+      } else if (k === 'p') {
+        this._kt('pen');
+      } else if (k === 'l') {
+        this._kt('laser');
+      } else if (k === 'h') {
+        this._kt('highlight');
+      } else if (k === 'e') {
+        this._kt('erase');
+      } else if (k === 'c') {
+        this.clearPage();
+      } else if (k === 'f') {
+        this.toggleFullscreen(!this.isFullscreen);
+      }
+    }
+
+    _kt(t) {
+      this.mouseTool = t;
+      this.toolInd.textContent = TOOL_LABEL[t];
+    }
+  }
+
+  AC.PresenterMode = PresenterMode;
+})();
