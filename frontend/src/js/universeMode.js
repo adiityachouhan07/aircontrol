@@ -230,6 +230,7 @@
       this.ray = new THREE.Raycaster(); this.tmp = new THREE.Vector3(); this.clock = new THREE.Clock(false);
       this.view = this._defaultView('galaxy'); this.goal = this._defaultView('galaxy');
       this.focus = null; this.orbiters = []; this.t = 0;
+      this.timeScale = 1.0; 
       this.pmats = [];
       this.atmos = [];
     }
@@ -270,36 +271,40 @@
       return p;
     }
     _buildFarStars() {
-      const N = 8000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
+      const N = 9000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
       for (let i = 0; i < N; i++) {
-        const u = Math.random() * 2 - 1, a = Math.random() * TAU, s = Math.sqrt(1 - u * u), R = 4000 + Math.random() * 4000;
+        const u = Math.random() * 2 - 1, a = Math.random() * TAU, s = Math.sqrt(1 - u * u), R = 3500 + Math.random() * 4500;
         pos.set([R * s * Math.cos(a), R * u, R * s * Math.sin(a)], i * 3);
         const w = Math.random(); col.set([0.65 + 0.35 * w, 0.75 + 0.2 * w, 1], i * 3); sz[i] = 4 + Math.random() * 10; al[i] = 0.25 + Math.random() * 0.6;
       }
       this.scene.add(this._particles(pos, col, sz, al, 1.0));
     }
     _buildGalaxy() {
-      const N = 85000, R = 950, arms = 4, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
+      const N = 95000, R = 1100, arms = 4, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
       const g = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
       
       for (let i = 0; i < N; i++) {
         let r, a, y; const c = [1, 1, 1];
-        if (Math.random() < 0.28) { 
-          // Dense central bulge & halo
-          r = Math.pow(Math.random(), 1.6) * 220; 
+        if (Math.random() < 0.22) { 
+          r = Math.pow(Math.random(), 1.4) * 260; 
           a = Math.random() * TAU; 
-          y = g() * 38 * (1 - r / 250); 
+          y = g() * 45 * (1 - r / 300); 
           c[0] = 1; c[1] = 0.88; c[2] = 0.7; 
+        } else if (Math.random() < 0.50) {
+          r = Math.sqrt(Math.random()) * R;
+          a = Math.random() * TAU;
+          y = g() * 30 * (1 - r / R);
+          const t = r / R;
+          c[0] = lerp(0.9, 0.4, t); c[1] = lerp(0.8, 0.6, t); c[2] = lerp(0.7, 1, t);
         } else {
-          // Even spiral arms distribution all around 360 degrees
-          r = (0.06 + Math.pow(Math.random(), 0.82)) * R; 
+          r = (0.05 + Math.pow(Math.random(), 0.85)) * R; 
           const arm = i % arms; 
           const armAngle = arm * (TAU / arms);
-          const spiralOffset = (r / R) * 5.2;
-          const scatter = g() * 0.38 * (1.1 - 0.5 * r / R);
+          const spiralOffset = (r / R) * 4.8;
+          const scatter = g() * 0.55 * (1.1 - 0.4 * r / R);
           
           a = armAngle + spiralOffset + scatter; 
-          y = g() * 18 * (1 - 0.75 * r / R);
+          y = g() * 22 * (1 - 0.7 * r / R);
           
           const t = r / R; 
           c[0] = lerp(1, 0.4, Math.min(1, t * 1.25)); 
@@ -309,19 +314,18 @@
         }
         pos.set([Math.cos(a) * r, y, Math.sin(a) * r], i * 3); 
         col.set(c, i * 3); 
-        sz[i] = 1.1 + Math.random() * 2.4; 
-        al[i] = 0.3 + Math.random() * 0.7;
+        sz[i] = 1.0 + Math.random() * 2.3; 
+        al[i] = 0.25 + Math.random() * 0.7;
       }
       this.galaxyG.add(this._particles(pos, col, sz, al));
 
-      // Cosmic Dust lanes spread balanced across all 4 arms
-      const D = 6500, dp = new Float32Array(D * 3), dc = new Float32Array(D * 3), ds = new Float32Array(D), da = new Float32Array(D);
+      const D = 8000, dp = new Float32Array(D * 3), dc = new Float32Array(D * 3), ds = new Float32Array(D), da = new Float32Array(D);
       for (let i = 0; i < D; i++) {
-        const r = (0.08 + Math.pow(Math.random(), 0.88)) * R, arm = i % arms, a = arm * (TAU / arms) + (r / R) * 5.2 + g() * 0.22;
-        dp.set([Math.cos(a) * r, g() * 12, Math.sin(a) * r], i * 3); 
+        const r = (0.05 + Math.pow(Math.random(), 0.85)) * R, a = Math.random() * TAU;
+        dp.set([Math.cos(a) * r, g() * 16, Math.sin(a) * r], i * 3); 
         dc.set([0.22, 0.32, 0.85], i * 3); 
         ds[i] = 24 + Math.random() * 32; 
-        da[i] = 0.045;
+        da[i] = 0.04;
       }
       this.galaxyG.add(this._particles(dp, dc, ds, da));
     }
@@ -352,7 +356,6 @@
         pick.userData.body = { id: name, name, type: 'Star', obj: pick, pickR: 10, focusR: 60, kind: 'star', desc, facts };
         this.galaxyG.add(pick); this.pickables.galaxy.push(pick);
       });
-      // Solar System navigation marker (glowing sun, cone pointing at it, label)
       const m = (this.solarMarker = new THREE.Group()); m.position.copy(SOLAR_POS); this.galaxyG.add(m);
       const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffd27a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sun.scale.set(20, 20, 1); m.add(sun);
       this.cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 11, 4), new THREE.MeshBasicMaterial({ color: 0x5ee7ff, transparent: true, opacity: 0.9 }));
@@ -373,7 +376,7 @@
       else map = TEX[def.kind](def.pal, w, h);
       const mat = def.kind === 'earth'
         ? new THREE.MeshPhongMaterial({ map, specular: new THREE.Color(0x6688bb), shininess: 28, ...extra })
-        : new THREE.MeshStandardMaterial({ map, roughness: 0.95, metalness: 0, bumpMap: ['rock', 'ice', 'volcanic'].includes(def.kind) ? map : null, bumpScale: 0.8 });
+        : new THREE.MeshStandardMaterial({ map, roughness: 0.8, metalness: 0.1, bumpMap: ['rock', 'ice', 'volcanic'].includes(def.kind) ? map : null, bumpScale: 0.8 });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(def.r, isMoon ? 24 : 64, isMoon ? 16 : 48), mat);
       mesh.rotation.order = 'ZYX'; mesh.rotation.z = def.tilt || 0.1; if (def.id === 'saturn' || def.id === 'earth') { mesh.castShadow = true; mesh.receiveShadow = true; }
       group.add(mesh);
@@ -396,7 +399,7 @@
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }));
         sp.scale.set(s, s, 1); S.add(sp);
       });
-      // Subtle Solar Flare Particles
+      
       const FN = 300, fd = new Float32Array(FN * 3), fs = new Float32Array(FN), centers = Array.from({ length: 14 }, () => new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize());
       for (let i = 0; i < FN; i++) { const d = centers[i % 14].clone().add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.12)).normalize(); fd.set([d.x, d.y, d.z], i * 3); fs[i] = Math.random(); }
       const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FN * 3), 3));
@@ -409,10 +412,12 @@
         desc: 'The star at the heart of our solar system. Its surface churns with plasma and erupts in solar flares.', facts: [['Diameter', '1.39 M km'], ['Surface', '5,500 °C'], ['Age', '4.6 B yrs']] };
       S.add(sp); this.pickables.system.push(sp);
 
-      // Lights (the Sun casts shadows – used for Saturn's rings)
-      this.sunLight = new THREE.PointLight(0xfff0dd, 2.2, 0, 0); this.sunLight.castShadow = true;
+      // LIGHTING FOR PLANETS
+      this.sunLight = new THREE.PointLight(0xfff5e6, 3.8, 0, 0); this.sunLight.castShadow = true;
       this.sunLight.shadow.mapSize.set(2048, 2048); this.sunLight.shadow.camera.near = 12; this.sunLight.shadow.camera.far = 220;
-      this.sunLight.shadow.bias = -0.0008; S.add(this.sunLight, new THREE.AmbientLight(0x2a3a6a, 0.55));
+      this.sunLight.shadow.bias = -0.0008; 
+      
+      S.add(this.sunLight, new THREE.AmbientLight(0x5a78c8, 1.4));
 
       // Planets + orbit lines
       const holders = {};
@@ -422,7 +427,7 @@
         const mesh = this._body(p, holder, false);
         this.orbiters.push({ pivot, sp: p.sp * 0.5 }, { spin: mesh, sp: 0.4 });
         const pts = []; for (let k = 0; k <= 128; k++) pts.push(new THREE.Vector3(Math.cos((k / 128) * TAU) * p.d, 0, Math.sin((k / 128) * TAU) * p.d));
-        S.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x3d7bff, transparent: true, opacity: 0.18 })));
+        S.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x3d7bff, transparent: true, opacity: 0.25 })));
         if (p.atmo) {
           const am = new THREE.ShaderMaterial({ vertexShader: ATMO_V, fragmentShader: ATMO_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
             uniforms: { uSun: { value: new THREE.Vector3(-1, 0, 0) }, uCol: { value: new THREE.Vector3(...p.atmo) } } });
@@ -445,7 +450,7 @@
         const mesh = this._body(m, h, true); this.orbiters.push({ pivot, sp: m.sp }, { spin: mesh, sp: 0.3 });
       });
 
-      // Asteroid belt: individually tumbling rocks (instanced)
+      // Asteroid belt
       const geo = new THREE.IcosahedronGeometry(1, 1), pa = geo.attributes.position;
       for (let i = 0; i < pa.count; i++) { const k = 0.7 + h3(Math.round(pa.getX(i) * 100), Math.round(pa.getY(i) * 100), Math.round(pa.getZ(i) * 100)) * 0.6; pa.setXYZ(i, pa.getX(i) * k, pa.getY(i) * k * 0.8, pa.getZ(i) * k); }
       geo.computeVertexNormals();
@@ -562,12 +567,16 @@
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
       for (const h of frame.hands) {
-        if (h.gesture === 'palm') { 
+        if (h.gesture === 'palm' || h.gesture === 'open') {
+          if (h.side === 'right') {
+            this.timeScale = Math.min(4.5, this.timeScale + dt * 2.2);
+          } else if (h.side === 'left') {
+            this.timeScale = Math.max(0.12, this.timeScale - dt * 2.2);
+          }
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
         }
         else if (h.gesture === 'pinch' || h.gesture === 'victory' || h.gesture === 'peace') {
-          // Trigger Card Action on Pinch / Victory / 2-Finger gesture
           if (this.selected && this.selected.action && now - (this.lastAction || 0) > 1000) {
             this.lastAction = now;
             if (this.selected.kind === 'solar') this.enterSystem();
@@ -606,10 +615,11 @@
     pause() { this.running = false; this.clock.stop(); cancelAnimationFrame(this.raf); }
     _loop = () => {
       if (!this.running) return; this.raf = requestAnimationFrame(this._loop);
-      const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt; this._update(dt); this._render();
+      const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt * (this.timeScale || 1.0); this._update(dt); this._render();
     };
     _update(dt) {
       const t = this.t; 
+      const effectiveDt = dt * (this.timeScale || 1.0);
       if (this.pmats) this.pmats.forEach((m) => { if (m && m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = t; });
       if (this.focus) this.focus.getWorldPosition(this.goal.target);
       else this.goal.target.lerp(new THREE.Vector3(), 0.05);
@@ -622,11 +632,11 @@
       } else {
         if (this.sunMat && this.sunMat.uniforms) this.sunMat.uniforms.uTime.value = t; 
         if (this.flareMat && this.flareMat.uniforms) this.flareMat.uniforms.uTime.value = t;
-        this.orbiters.forEach((o) => { if (o.pivot) o.pivot.rotation.y += o.sp * dt; else o.spin.rotation.y += o.sp * dt; });
-        if (this.clouds) this.clouds.rotation.y += dt * 0.05;
+        this.orbiters.forEach((o) => { if (o.pivot) o.pivot.rotation.y += o.sp * effectiveDt; else o.spin.rotation.y += o.sp * effectiveDt; });
+        if (this.clouds) this.clouds.rotation.y += effectiveDt * 0.05;
         if (this.atmos) this.atmos.forEach(({ holder, am }) => { holder.getWorldPosition(this.tmp); am.uniforms.uSun.value.copy(this.tmp).multiplyScalar(-1).normalize(); });
         const o = this._tmpO; this.beltData.forEach((d, i) => {
-          d.a += d.w * dt; d.rx += d.tx * dt; d.ry += d.ty * dt; o.position.set(Math.cos(d.a) * d.r, d.y, Math.sin(d.a) * d.r); o.rotation.set(d.rx, d.ry, 0); o.scale.setScalar(d.s); o.updateMatrix(); this.belt.setMatrixAt(i, o.matrix);
+          d.a += d.w * effectiveDt; d.rx += d.tx * effectiveDt; d.ry += d.ty * effectiveDt; o.position.set(Math.cos(d.a) * d.r, d.y, Math.sin(d.a) * d.r); o.rotation.set(d.rx, d.ry, 0); o.scale.setScalar(d.s); o.updateMatrix(); this.belt.setMatrixAt(i, o.matrix);
         }); this.belt.instanceMatrix.needsUpdate = true;
       }
       // hover ring
@@ -694,21 +704,44 @@
     _note(t) { this.note.textContent = t; this.note.classList.remove('hidden'); }
     close() { this.active = false; this.root.classList.add('hidden'); document.body.classList.remove('earth-open'); this.mapEl.innerHTML = ''; this.map = null; }
 
-    /** Touchless navigation of the 3D map */
+    /** Map Navigation Gestures */
     handleFrame(frame, dt) {
-      const m = this.map; if (!m || this.mode !== '3d') return;
+      const m = this.map;
+      const now = performance.now();
+
       for (const h of frame.hands) {
-        if (h.gesture === 'point') {
-          const c = m.center, k = (m.range || 1e6) / 111000 * 3.5, hd = ((m.heading || 0) * Math.PI) / 180;
-          const dx = h.delta.x * k, up = -h.delta.y * k, cs = Math.cos(hd), sn = Math.sin(hd);
-          const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);
-          m.center = { lat: Math.max(-85, Math.min(85, c.lat + dN)), lng: c.lng + dE / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180)), altitude: c.altitude || 0 };
-        } else if (h.gesture === 'palm') {
-          m.heading = ((m.heading || 0) - h.delta.x * 350 + 360) % 360; m.tilt = Math.max(0, Math.min(80, (m.tilt || 0) + h.delta.y * 200));
-        } else if (h.gesture === 'pinch') {
-          const factor = (h.side === 'left' ? -1 : 1) * dt * 3.5;
-          m.range = Math.max(200, Math.min(2.2e7, (m.range || 1e6) * Math.exp(factor)));
-        } else if (h.gesture === 'fist') { m.heading = 0; m.tilt = 0; }
+        // Two Fingers (Peace / Victory) = Return to Space / Close Map
+        if (h.gesture === 'victory' || h.gesture === 'peace') {
+          if (now - (this.lastClose || 0) > 1000) {
+            this.lastClose = now;
+            this.close();
+            return;
+          }
+        }
+        
+        // Pinch Gestures = Zoom Control (Right: Zoom In, Left: Zoom Out)
+        else if (h.gesture === 'pinch') {
+          if (m && this.mode === '3d') {
+            const zoomFactor = h.side === 'right' ? 0.75 : 1.35;
+            m.range = Math.max(200, Math.min(2.2e7, (m.range || 1e6) * zoomFactor));
+          }
+        }
+        
+        // Open Palm Gesture = Map Pan / Explore & Camera Rotation
+        else if (h.gesture === 'palm' || h.gesture === 'open') {
+          if (m && this.mode === '3d') {
+            const c = m.center;
+            const k = (m.range || 1e6) / 111000 * 3.5;
+            const hd = ((m.heading || 0) * Math.PI) / 180;
+            const dx = h.delta.x * k, up = -h.delta.y * k, cs = Math.cos(hd), sn = Math.sin(hd);
+            const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);
+            m.center = { lat: Math.max(-85, Math.min(85, c.lat + dN)), lng: c.lng + dE / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180)), altitude: c.altitude || 0 };
+            
+            // Gentle camera rotation with palm motion
+            m.heading = ((m.heading || 0) - h.delta.x * 200 + 360) % 360;
+            m.tilt = Math.max(0, Math.min(80, (m.tilt || 0) + h.delta.y * 120));
+          }
+        }
       }
     }
   }
