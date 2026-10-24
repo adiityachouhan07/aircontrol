@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/css/styles.css" />
 
-  <!-- OpenLayers CSS & JS (Direct Canvas Satellite Map for Touchless Hand Gestures) -->
+  <!-- OpenLayers CSS & JS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/css/ol.css" type="text/css">
   <script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/build/ol.js"></script>
 </head>
@@ -58,6 +58,13 @@
 
     <div id="earth-view" class="hidden">
       <div id="earth-map"></div>
+      
+      <!-- Earth Location Search Bar -->
+      <div id="earth-search-box" class="glass">
+        <input type="text" id="earth-search-input" placeholder="Search location (e.g., Tokyo, Delhi, Paris)..." autocomplete="off" />
+        <div id="earth-search-results" class="glass hidden"></div>
+      </div>
+
       <div id="earth-note" class="glass hidden"></div>
       <button id="earth-return" class="btn-glow">Return to Space</button>
       <div id="earth-help" class="glass">
@@ -118,7 +125,7 @@
     </svg><i></i>
   </div>
 
-  <div id="cam-preview" class="glass hidden">
+  <div id="cam-preview" class="glass">
     <video id="cam-video" playsinline muted></video>
     <canvas id="cam-overlay"></canvas>
   </div>
