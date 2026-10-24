@@ -4,6 +4,7 @@
   const { PI } = Math;
   const TAU = PI * 2;
 
+  
   /* ---------- procedural noise + texture helpers ---------- */
   function h3(x, y, z) {
     let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1274126177);
