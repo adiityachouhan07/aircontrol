@@ -1,4 +1,4 @@
-/* AirControl – Presenter mode: PDF/PPT slides + live gesture annotations + Auto-Shape + Thumbs Up/Down Fullscreen */
+/* AirControl – Presenter mode: PDF/PPT slides + live gesture annotations + Zoom/Pan Pinch + Thumbs Up/Down Fullscreen */
 (function () {
   const AC = (window.AC = window.AC || {});
   const COLORS = ['#3d7bff', '#5ee7ff', '#ffffff', '#ff4d6d', '#ffd23f', '#3ddc84', '#b06bff', '#ff9f43'];
@@ -104,7 +104,7 @@
   /* ---- slide sources ---- */
   function demoDeck() {
     const slides = [
-      ['AirControl Presenter', 'Draw, point and navigate with your hands', ['☝ One finger — pen', '✌ Two fingers — laser pointer', '3 fingers — highlighter', '✋ Open palm — eraser', '👍 Thumbs Up — Fullscreen + FaceCam', '👎 Thumbs Down — Exit Fullscreen']],
+      ['AirControl Presenter', 'Draw, point and navigate with your hands', ['☝ One finger — pen', '✌ Two fingers — laser pointer', '3 fingers — highlighter', '✋ Open palm — eraser', '👍 Thumbs Up — Fullscreen + FaceCam', '👎 Thumbs Down — Exit Fullscreen', '🤏 Right Pinch — Zoom In at Point', '🤏 Left Pinch — Zoom Out']],
       ['Upload your deck', 'PDF, PPT or PPTX', ['Use the upload button at the top-left', 'PowerPoint files are converted on the server', 'Annotations are kept per slide']],
       ['Keyboard & mouse work too', 'Every gesture has a fallback', ['P pen · L laser · H highlighter · E eraser', '← → change slide · C clears the slide', 'Click and drag to draw']],
     ];
@@ -192,6 +192,12 @@
       this.mouseDown = false;
       this.isFullscreen = false;
       this.lastFullscreenToggle = 0;
+      
+      // Zoom & Pan state for pointer pinch zooming
+      this.zoom = 1;
+      this.panX = 0;
+      this.panY = 0;
+
       this._buildToolbar();
       this._bindInput();
     }
@@ -292,6 +298,10 @@
 
     activate() {
       this.active = true;
+      this.zoom = 1;
+      this.panX = 0;
+      this.panY = 0;
+      this._updateCanvasTransform();
       this.show(this.page);
     }
 
@@ -300,6 +310,13 @@
       this.toggleFullscreen(false);
       this._release();
       this._clearFx();
+    }
+
+    _updateCanvasTransform() {
+      const transformVal = `translate(calc(-50% + ${this.panX}px), calc(-50% + ${this.panY}px)) scale(${this.zoom})`;
+      [this.slide, this.ann, this.live, this.fx].forEach((c) => {
+        if (c) c.style.transform = transformVal;
+      });
     }
 
     /* ---- rendering ---- */
@@ -322,6 +339,7 @@
         c.style.width = cw + 'px';
         c.style.height = ch + 'px';
       });
+      this._updateCanvasTransform();
       await pg.render(this.slide.getContext('2d'), fit * this.dpr);
       if (tok !== this.tok) return;
       const saved = this.store[this.page];
@@ -340,6 +358,9 @@
 
     go(d) {
       if (this.page + d < 1 || this.page + d > this.doc.count) return;
+      this.zoom = 1;
+      this.panX = 0;
+      this.panY = 0;
       this.show(this.page + d);
     }
 
@@ -386,7 +407,45 @@
         }
       }
 
-      // 2. SLIDE SWIPE
+      // 2. PINCH GESTURES FOR ZOOM IN (Right Hand) & ZOOM OUT (Left Hand) at Pointer Location
+      for (const h of frame.hands) {
+        if (h.gesture === 'pinch') {
+          const stageRect = this.stage.getBoundingClientRect();
+          const centerX = stageRect.width / 2;
+          const centerY = stageRect.height / 2;
+          const targetX = h.x - stageRect.left;
+          const targetY = h.y - stageRect.top;
+
+          if (h.side === 'right') {
+            // Right hand pinch = Zoom In towards the pointer location
+            const oldZoom = this.zoom;
+            this.zoom = Math.min(4, this.zoom + 0.04);
+            const zoomRatio = this.zoom / oldZoom;
+            this.panX = targetX - (targetX - this.panX) * zoomRatio;
+            this.panY = targetY - (targetY - this.panY) * zoomRatio;
+            this._updateCanvasTransform();
+            this.toast(`Zoom: ${Math.round(this.zoom * 100)}%`, 600);
+            return;
+          } else if (h.side === 'left') {
+            // Left hand pinch = Zoom Out
+            const oldZoom = this.zoom;
+            this.zoom = Math.max(1, this.zoom - 0.04);
+            if (this.zoom === 1) {
+              this.panX = 0;
+              this.panY = 0;
+            } else {
+              const zoomRatio = this.zoom / oldZoom;
+              this.panX = targetX - (targetX - this.panX) * zoomRatio;
+              this.panY = targetY - (targetY - this.panY) * zoomRatio;
+            }
+            this._updateCanvasTransform();
+            this.toast(`Zoom: ${Math.round(this.zoom * 100)}%`, 600);
+            return;
+          }
+        }
+      }
+
+      // 3. SLIDE SWIPE
       if (frame.swipe) {
         this._release();
         this.go(frame.swipe === 'left' ? 1 : -1);
@@ -394,7 +453,7 @@
         return;
       }
 
-      // 3. ANNOTATION TOOLS
+      // 4. ANNOTATION TOOLS
       const cands = frame.hands.filter((h) => TOOL_BY_GESTURE[h.gesture]);
       let h = cands.find((c) => c.side === this.activeSide)
         || cands.find((c) => c.side === 'right')
