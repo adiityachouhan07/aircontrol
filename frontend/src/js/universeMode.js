@@ -235,6 +235,7 @@
       this.atmos = [];
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
+      this.ignoreGesturesUntil = 0;
     }
 
     _defaultView(scope) {
@@ -560,6 +561,7 @@
       this.hover = null;
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
+      this.ignoreGesturesUntil = performance.now() + 1200;
       this.prevGesture = {};
       this._renderCard(null);
       this.view = this._defaultView('system'); 
@@ -580,6 +582,7 @@
       this.hover = null;
       this.enterGestureFrames = 0;
       this.threeFingerFrames = 0;
+      this.ignoreGesturesUntil = performance.now() + 1200;
       this.prevGesture = {};
       this._renderCard(null);
       this.view = this._defaultView('galaxy'); 
@@ -594,6 +597,12 @@
     /* ----- hand input ----- */
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
+      
+      // Ignore hand gestures temporarily right after switching scopes to prevent stuck gesture state
+      if (now < (this.ignoreGesturesUntil || 0)) {
+        return { side: null, progress: 0, hovering: false };
+      }
+
       let isTwoFingerEnter = false;
       let detectedThreeFingers = false;
 
