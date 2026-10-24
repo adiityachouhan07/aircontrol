@@ -230,6 +230,8 @@
       this.ray = new THREE.Raycaster(); this.tmp = new THREE.Vector3(); this.clock = new THREE.Clock(false);
       this.view = this._defaultView('galaxy'); this.goal = this._defaultView('galaxy');
       this.focus = null; this.orbiters = []; this.t = 0;
+      this.pmats = []; // FIXED: Initialized particle materials array
+      this.atmos = [];
     }
 
     _defaultView(scope) {
@@ -261,7 +263,12 @@
       g.setAttribute('aSize', new THREE.BufferAttribute(size, 1)); g.setAttribute('aAlpha', new THREE.BufferAttribute(alpha, 1));
       const m = new THREE.ShaderMaterial({ vertexShader: PARTICLE_V, fragmentShader: PARTICLE_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
         uniforms: { uTime: { value: 0 }, uPx: { value: this.px }, uMin: { value: min * this.px } } });
-      const p = new THREE.Points(g, m); p.frustumCulled = false; (this.pmats ||= []).push(m); return p;
+      const p = new THREE.Points(g, m); p.frustumCulled = false; 
+      
+      // FIXED: Safe array push
+      if (!this.pmats) this.pmats = [];
+      this.pmats.push(m); 
+      return p;
     }
     _buildFarStars() {
       const N = 5000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sz = new Float32Array(N), al = new Float32Array(N);
@@ -395,7 +402,9 @@
         if (p.atmo) {
           const am = new THREE.ShaderMaterial({ vertexShader: ATMO_V, fragmentShader: ATMO_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
             uniforms: { uSun: { value: new THREE.Vector3(-1, 0, 0) }, uCol: { value: new THREE.Vector3(...p.atmo) } } });
-          const a = new THREE.Mesh(new THREE.SphereGeometry(p.r * 1.12, 48, 32), am); holder.add(a); (this.atmos ||= []).push({ holder, am });
+          const a = new THREE.Mesh(new THREE.SphereGeometry(p.r * 1.12, 48, 32), am); holder.add(a); 
+          if (!this.atmos) this.atmos = [];
+          this.atmos.push({ holder, am });
         }
         if (p.id === 'earth') {
           const ct = TEX.clouds(512, 256);
@@ -552,18 +561,22 @@
       const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt; this._update(dt); this._render();
     };
     _update(dt) {
-      const t = this.t; this.pmats.forEach((m) => (m.uniforms.uTime.value = t));
+      const t = this.t; 
+      if (this.pmats) this.pmats.forEach((m) => { if (m && m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = t; });
       if (this.focus) this.focus.getWorldPosition(this.goal.target);
       else this.goal.target.lerp(new THREE.Vector3(), 0.05);
       this._applyView(1 - Math.exp(-dt * 5));
       if (this.scope === 'galaxy') {
-        this.diskMat.uniforms.uTime.value = t; this.haloMat.uniforms.uTime.value = t; this.halo.lookAt(this.camera.position);
-        this.cone.position.y = 22 + Math.sin(t * 2) * 2.5; this.cone.rotation.y = t;
+        if (this.diskMat && this.diskMat.uniforms) this.diskMat.uniforms.uTime.value = t; 
+        if (this.haloMat && this.haloMat.uniforms) this.haloMat.uniforms.uTime.value = t; 
+        if (this.halo) this.halo.lookAt(this.camera.position);
+        if (this.cone) { this.cone.position.y = 22 + Math.sin(t * 2) * 2.5; this.cone.rotation.y = t; }
       } else {
-        this.sunMat.uniforms.uTime.value = t; this.flareMat.uniforms.uTime.value = t;
+        if (this.sunMat && this.sunMat.uniforms) this.sunMat.uniforms.uTime.value = t; 
+        if (this.flareMat && this.flareMat.uniforms) this.flareMat.uniforms.uTime.value = t;
         this.orbiters.forEach((o) => { if (o.pivot) o.pivot.rotation.y += o.sp * dt; else o.spin.rotation.y += o.sp * dt; });
         if (this.clouds) this.clouds.rotation.y += dt * 0.05;
-        this.atmos.forEach(({ holder, am }) => { holder.getWorldPosition(this.tmp); am.uniforms.uSun.value.copy(this.tmp).multiplyScalar(-1).normalize(); });
+        if (this.atmos) this.atmos.forEach(({ holder, am }) => { holder.getWorldPosition(this.tmp); am.uniforms.uSun.value.copy(this.tmp).multiplyScalar(-1).normalize(); });
         const o = this._tmpO; this.beltData.forEach((d, i) => {
           d.a += d.w * dt; d.rx += d.tx * dt; d.ry += d.ty * dt; o.position.set(Math.cos(d.a) * d.r, d.y, Math.sin(d.a) * d.r); o.rotation.set(d.rx, d.ry, 0); o.scale.setScalar(d.s); o.updateMatrix(); this.belt.setMatrixAt(i, o.matrix);
         }); this.belt.instanceMatrix.needsUpdate = true;
@@ -637,7 +650,7 @@
     handleFrame(frame, dt) {
       const m = this.map; if (!m || this.mode !== '3d') return;
       for (const h of frame.hands) {
-        if (h.gesture === 'point') {                       // pan
+        if (h.gesture === 'point') {                     // pan
           const c = m.center, k = (m.range || 1e6) / 111000 * 1.4, hd = ((m.heading || 0) * Math.PI) / 180;
           const dx = h.delta.x * k, up = -h.delta.y * k, cs = Math.cos(hd), sn = Math.sin(hd);
           const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);   // drag the map with the hand
