@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AirControl – touchless universe &amp; presenter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/css/styles.css" />
+</head>
+<body class="mode-universe">
+
+  <!-- Top bar -->
+  <header id="topbar" class="glass">
+    <div class="brand"><span class="brand-dot"></span>AirControl</div>
+    <nav id="mode-tabs" aria-label="Mode">
+      <button data-mode="universe" class="tab active" title="Key: 1">Universe</button>
+      <button data-mode="presenter" class="tab" title="Key: 2">Presenter</button>
+    </nav>
+    <div class="status">
+      <span id="cam-status" class="pill off" title="Camera status">Camera off</span>
+      <span id="gesture-status" class="pill">No hand</span>
+      <button id="cam-btn" class="btn-glow">Enable hand tracking</button>
+    </div>
+  </header>
+
+  <!-- UNIVERSE MODE -->
+  <section id="universe-root" class="mode-root">
+    <canvas id="universe-canvas"></canvas>
+
+    <div id="uni-breadcrumb" class="glass">
+      <button id="btn-back-galaxy" class="link hidden">← Galaxy</button>
+      <span id="uni-scope">Milky Way</span>
+    </div>
+
+    <aside id="gesture-help" class="glass">
+      <div><b>Open palm</b> rotate</div>
+      <div><b>Pinch left</b> zoom in</div>
+      <div><b>Pinch right</b> zoom out</div>
+      <div><b>Point &amp; hold</b> select</div>
+      <div><b>Fist</b> reset view</div>
+      <div class="muted">Mouse: drag · wheel · click · R reset</div>
+    </aside>
+
+    <div id="body-card" class="glass hidden">
+      <button id="card-close" class="icon-btn" aria-label="Close">×</button>
+      <h2 id="card-title"></h2>
+      <p id="card-type" class="muted"></p>
+      <p id="card-desc"></p>
+      <dl id="card-facts"></dl>
+      <div class="card-actions">
+        <button id="card-action" class="btn-glow hidden"></button>
+      </div>
+    </div>
+
+    <!-- Earth surface overlay -->
+    <div id="earth-view" class="hidden">
+      <div id="earth-map"></div>
+      <div id="earth-note" class="glass hidden"></div>
+      <button id="earth-return" class="btn-glow">Return to Space</button>
+      <div id="earth-help" class="glass">
+        <div><b>Point</b> pan</div><div><b>Open palm</b> rotate &amp; tilt</div>
+        <div><b>Pinch L / R</b> zoom in / out</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRESENTER MODE -->
+  <section id="presenter-root" class="mode-root hidden">
+    <div id="stage">
+      <canvas id="slide-canvas"></canvas>
+      <canvas id="ann-canvas"></canvas>
+      <canvas id="live-canvas"></canvas>
+      <canvas id="fx-canvas"></canvas>
+      <div id="edge-prev" class="edge"></div>
+      <div id="edge-next" class="edge"></div>
+    </div>
+
+    <div id="toolbar" class="glass">
+      <label class="tool-btn" title="Upload PDF / PPT / PPTX">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <input id="file-input" type="file" accept=".pdf,.ppt,.pptx,application/pdf" hidden />
+      </label>
+      <div id="swatches"></div>
+      <input id="thickness" type="range" min="2" max="24" value="5" title="Pen thickness" />
+    </div>
+
+    <div id="pres-indicator" class="glass"><span id="page-ind">1 / 1</span><span id="tool-ind">Pen</span></div>
+    <div id="toast" class="glass hidden"></div>
+  </section>
+
+  <!-- Hand cursors + camera preview -->
+  <div id="cursor-0" class="hand-cursor hidden"><svg viewBox="0 0 48 48"><circle class="ring" cx="24" cy="24" r="20"/></svg><i></i></div>
+  <div id="cursor-1" class="hand-cursor hidden"><svg viewBox="0 0 48 48"><circle class="ring" cx="24" cy="24" r="20"/></svg><i></i></div>
+  <div id="cam-preview" class="glass hidden"><video id="cam-video" playsinline muted></video><canvas id="cam-overlay"></canvas></div>
+
+  <!-- CDN libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- App -->
+  <script src="/src/js/handTracking.js"></script>
+  <script src="/src/js/universeMode.js"></script>
+  <script src="/src/js/presenterMode.js"></script>
+  <script src="/src/js/main.js"></script>
+</body>
+</html>
