@@ -1,4 +1,4 @@
-/* AirControl – Presenter mode: PDF/PPT slides + live gesture annotations + Zoom/Pan Pinch + Thumbs Up/Down Fullscreen */
+/* AirControl – Presenter mode: PDF/PPT slides + live gesture annotations + Cursor-Centric Pinch Zoom + Thumbs Up/Down Fullscreen */
 (function () {
   const AC = (window.AC = window.AC || {});
   const COLORS = ['#3d7bff', '#5ee7ff', '#ffffff', '#ff4d6d', '#ffd23f', '#3ddc84', '#b06bff', '#ff9f43'];
@@ -104,7 +104,7 @@
   /* ---- slide sources ---- */
   function demoDeck() {
     const slides = [
-      ['AirControl Presenter', 'Draw, point and navigate with your hands', ['☝ One finger — pen', '✌ Two fingers — laser pointer', '3 fingers — highlighter', '✋ Open palm — eraser', '👍 Thumbs Up — Fullscreen + FaceCam', '👎 Thumbs Down — Exit Fullscreen', '🤏 Right Pinch — Zoom In at Point', '🤏 Left Pinch — Zoom Out']],
+      ['AirControl Presenter', 'Draw, point and navigate with your hands', ['☝ One finger — pen', '✌ Two fingers — laser pointer', '3 fingers — highlighter', '✋ Open palm — eraser', '👍 Thumbs Up — Fullscreen + FaceCam', '👎 Thumbs Down — Exit Fullscreen', '🤏 Right Pinch — Zoom In at Cursor', '🤏 Left Pinch — Zoom Out at Cursor']],
       ['Upload your deck', 'PDF, PPT or PPTX', ['Use the upload button at the top-left', 'PowerPoint files are converted on the server', 'Annotations are kept per slide']],
       ['Keyboard & mouse work too', 'Every gesture has a fallback', ['P pen · L laser · H highlighter · E eraser', '← → change slide · C clears the slide', 'Click and drag to draw']],
     ];
@@ -193,10 +193,12 @@
       this.isFullscreen = false;
       this.lastFullscreenToggle = 0;
       
-      // Zoom & Pan state for pointer pinch zooming
+      // Zoom & Pan state
       this.zoom = 1;
       this.panX = 0;
       this.panY = 0;
+      this.cw = 0;
+      this.ch = 0;
 
       this._buildToolbar();
       this._bindInput();
@@ -313,7 +315,12 @@
     }
 
     _updateCanvasTransform() {
-      const transformVal = `translate(calc(-50% + ${this.panX}px), calc(-50% + ${this.panY}px)) scale(${this.zoom})`;
+      const stageW = this.stage.clientWidth;
+      const stageH = this.stage.clientHeight;
+      const initialLeft = (stageW - this.cw) / 2;
+      const initialTop = (stageH - this.ch) / 2;
+
+      const transformVal = `translate(${initialLeft + this.panX}px, ${initialTop + this.panY}px) scale(${this.zoom})`;
       [this.slide, this.ann, this.live, this.fx].forEach((c) => {
         if (c) c.style.transform = transformVal;
       });
@@ -330,15 +337,17 @@
       const maxW = this.stage.clientWidth * 0.94 - 70;
       const maxH = this.stage.clientHeight * 0.94;
       const fit = Math.min(maxW / pg.size.w, maxH / pg.size.h);
-      const cw = Math.round(pg.size.w * fit);
-      const ch = Math.round(pg.size.h * fit);
+      this.cw = Math.round(pg.size.w * fit);
+      this.ch = Math.round(pg.size.h * fit);
       this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      
       [this.slide, this.ann, this.live, this.fx].forEach((c) => {
-        c.width = Math.round(cw * this.dpr);
-        c.height = Math.round(ch * this.dpr);
-        c.style.width = cw + 'px';
-        c.style.height = ch + 'px';
+        c.width = Math.round(this.cw * this.dpr);
+        c.height = Math.round(this.ch * this.dpr);
+        c.style.width = this.cw + 'px';
+        c.style.height = this.ch + 'px';
       });
+
       this._updateCanvasTransform();
       await pg.render(this.slide.getContext('2d'), fit * this.dpr);
       if (tok !== this.tok) return;
@@ -407,39 +416,42 @@
         }
       }
 
-      // 2. PINCH GESTURES FOR ZOOM IN (Right Hand) & ZOOM OUT (Left Hand) at Pointer Location
+      // 2. CURSOR-CENTRIC PINCH ZOOM (Right Hand = Zoom In, Left Hand = Zoom Out)
       for (const h of frame.hands) {
         if (h.gesture === 'pinch') {
           const stageRect = this.stage.getBoundingClientRect();
-          const centerX = stageRect.width / 2;
-          const centerY = stageRect.height / 2;
+          const stageW = stageRect.width;
+          const stageH = stageRect.height;
           const targetX = h.x - stageRect.left;
           const targetY = h.y - stageRect.top;
 
+          const oldZoom = this.zoom;
           if (h.side === 'right') {
-            // Right hand pinch = Zoom In towards the pointer location
-            const oldZoom = this.zoom;
             this.zoom = Math.min(4, this.zoom + 0.04);
-            const zoomRatio = this.zoom / oldZoom;
-            this.panX = targetX - (targetX - this.panX) * zoomRatio;
-            this.panY = targetY - (targetY - this.panY) * zoomRatio;
-            this._updateCanvasTransform();
-            this.toast(`Zoom: ${Math.round(this.zoom * 100)}%`, 600);
-            return;
           } else if (h.side === 'left') {
-            // Left hand pinch = Zoom Out
-            const oldZoom = this.zoom;
             this.zoom = Math.max(1, this.zoom - 0.04);
+          }
+
+          if (this.zoom !== oldZoom) {
+            const initialLeft = (stageW - this.cw) / 2;
+            const initialTop = (stageH - this.ch) / 2;
+            const oldLeft = initialLeft + this.panX;
+            const oldTop = initialTop + this.panY;
+            const zoomRatio = this.zoom / oldZoom;
+
+            const newLeft = targetX - (targetX - oldLeft) * zoomRatio;
+            const newTop = targetY - (targetY - oldTop) * zoomRatio;
+
+            this.panX = newLeft - initialLeft;
+            this.panY = newTop - initialTop;
+
             if (this.zoom === 1) {
               this.panX = 0;
               this.panY = 0;
-            } else {
-              const zoomRatio = this.zoom / oldZoom;
-              this.panX = targetX - (targetX - this.panX) * zoomRatio;
-              this.panY = targetY - (targetY - this.panY) * zoomRatio;
             }
+
             this._updateCanvasTransform();
-            this.toast(`Zoom: ${Math.round(this.zoom * 100)}%`, 600);
+            this.toast(`Zoom: ${Math.round(this.zoom * 100)}%`, 400);
             return;
           }
         }
@@ -487,13 +499,26 @@
     }
 
     _toCanvas(x, y) {
-      const r = this.slide.getBoundingClientRect();
-      const px = (x - r.left) / r.width;
-      const py = (y - r.top) / r.height;
+      const stageRect = this.stage.getBoundingClientRect();
+      const stageW = stageRect.width;
+      const stageH = stageRect.height;
+      const initialLeft = (stageW - this.cw) / 2;
+      const initialTop = (stageH - this.ch) / 2;
+
+      // Map screen cursor coordinates to transformed canvas coordinates
+      const currentLeft = initialLeft + this.panX;
+      const currentTop = initialTop + this.panY;
+
+      const relX = x - stageRect.left - currentLeft;
+      const relY = y - stageRect.top - currentTop;
+
+      const canvasX = relX / this.zoom;
+      const canvasY = relY / this.zoom;
+
       return {
-        x: px * this.ann.width,
-        y: py * this.ann.height,
-        inside: px >= 0 && px <= 1 && py >= 0 && py <= 1
+        x: canvasX * this.dpr,
+        y: canvasY * this.dpr,
+        inside: canvasX >= 0 && canvasX <= this.cw && canvasY >= 0 && canvasY <= this.ch
       };
     }
 
