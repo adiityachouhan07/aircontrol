@@ -344,15 +344,14 @@ html, body {
 #stage {
   position: absolute;
   inset: 64px 0 0 0;
-  display: grid;
-  place-items: center;
+  overflow: hidden;
 }
 
 #stage canvas {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
 }
 
 #slide-canvas {
