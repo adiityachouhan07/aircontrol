@@ -1,4 +1,4 @@
-/* AirControl – 3D Universe mode (Three.js r128) + Google Earth surface view */
+/* AirControl – 3D Universe mode (Three.js r128) + OpenLayers Canvas Earth Surface */
 (function () {
   const AC = (window.AC = window.AC || {});
   const { PI } = Math;
@@ -230,7 +230,7 @@
       this.ray = new THREE.Raycaster(); this.tmp = new THREE.Vector3(); this.clock = new THREE.Clock(false);
       this.view = this._defaultView('galaxy'); this.goal = this._defaultView('galaxy');
       this.focus = null; this.orbiters = []; this.t = 0;
-      this.timeScale = 1.0; 
+      this.isTimeStopped = false; // State flag to toggle stop/start
       this.pmats = [];
       this.atmos = [];
     }
@@ -567,11 +567,12 @@
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
       for (const h of frame.hands) {
+        // TIME STOP / START TOGGLE (Left = Stop, Right = Start)
         if (h.gesture === 'palm' || h.gesture === 'open') {
-          if (h.side === 'right') {
-            this.timeScale = Math.min(4.5, this.timeScale + dt * 2.2);
-          } else if (h.side === 'left') {
-            this.timeScale = Math.max(0.12, this.timeScale - dt * 2.2);
+          if (h.side === 'left') {
+            this.isTimeStopped = true; // Freeze time completely
+          } else if (h.side === 'right') {
+            this.isTimeStopped = false; // Resume time
           }
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
@@ -615,11 +616,15 @@
     pause() { this.running = false; this.clock.stop(); cancelAnimationFrame(this.raf); }
     _loop = () => {
       if (!this.running) return; this.raf = requestAnimationFrame(this._loop);
-      const dt = Math.min(0.05, this.clock.getDelta()); this.t += dt * (this.timeScale || 1.0); this._update(dt); this._render();
+      const dt = Math.min(0.05, this.clock.getDelta()); 
+      if (!this.isTimeStopped) {
+        this.t += dt; 
+      }
+      this._update(dt); this._render();
     };
     _update(dt) {
       const t = this.t; 
-      const effectiveDt = dt * (this.timeScale || 1.0);
+      const effectiveDt = this.isTimeStopped ? 0 : dt;
       if (this.pmats) this.pmats.forEach((m) => { if (m && m.uniforms && m.uniforms.uTime) m.uniforms.uTime.value = t; });
       if (this.focus) this.focus.getWorldPosition(this.goal.target);
       else this.goal.target.lerp(new THREE.Vector3(), 0.05);
@@ -665,52 +670,67 @@
   AC.UniverseMode = UniverseMode;
 })();
 
-/* ================== Google Earth surface integration ================== */
+/* ================== OpenLayers Earth Surface (Direct Canvas - Hand Gestures Enabled) ================== */
 (function () {
   const AC = (window.AC = window.AC || {});
+
   class EarthSurface {
     constructor() {
-      this.root = document.getElementById('earth-view'); this.mapEl = document.getElementById('earth-map'); this.note = document.getElementById('earth-note');
-      this.map = null; this.active = false; this.apiKey = null; this.loading = null;
-      document.getElementById('earth-return').onclick = () => this.close();
-    }
-    async _key() {
-      if (this.apiKey !== null) return this.apiKey;
-      try { this.apiKey = (await (await fetch('/api/config')).json()).googleEarthApiKey || ''; } catch { this.apiKey = ''; }
-      return this.apiKey;
-    }
-    _loadMaps(key) {
-      if (window.google?.maps?.importLibrary) return Promise.resolve();
-      return (this.loading ||= new Promise((res, rej) => {
-        const s = document.createElement('script'); s.async = true;
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=beta&loading=async`;
-        s.onload = res; s.onerror = () => rej(new Error('Maps script failed to load')); document.head.appendChild(s);
-      }));
-    }
-    async open() {
-      this.active = true; this.root.classList.remove('hidden'); document.body.classList.add('earth-open'); this.mapEl.innerHTML = ''; this.note.classList.add('hidden');
-      const key = await this._key();
-      if (key) {
-        try {
-          await this._loadMaps(key);
-          const { Map3DElement } = await google.maps.importLibrary('maps3d');
-          this.map = new Map3DElement({ center: { lat: 20, lng: 10, altitude: 0 }, range: 14000000, tilt: 0, heading: 0, mode: 'HYBRID' });
-          this.mapEl.appendChild(this.map); this.mode = '3d'; return;
-        } catch (e) { console.warn('Photorealistic 3D failed:', e); this._note('Photorealistic 3D could not load (check API key & enabled APIs). Showing satellite fallback.'); }
-      } else this._note('No GOOGLE_EARTH_API_KEY set — showing keyless satellite fallback. Add a key for photorealistic 3D.');
-      this.mode = 'iframe'; this.map = null;
-      this.mapEl.innerHTML = '<iframe title="Earth" allowfullscreen src="https://maps.google.com/maps?ll=20,10&z=3&t=k&output=embed"></iframe>';
-    }
-    _note(t) { this.note.textContent = t; this.note.classList.remove('hidden'); }
-    close() { this.active = false; this.root.classList.add('hidden'); document.body.classList.remove('earth-open'); this.mapEl.innerHTML = ''; this.map = null; }
+      this.root = document.getElementById('earth-view');
+      this.mapEl = document.getElementById('earth-map');
+      this.active = false;
+      this.map = null;
 
-    /** Map Navigation Gestures */
+      const retBtn = document.getElementById('earth-return');
+      if (retBtn) retBtn.onclick = () => this.close();
+    }
+
+    open() {
+      this.active = true;
+      this.root.classList.remove('hidden');
+      document.body.classList.add('earth-open');
+      this.mapEl.innerHTML = '';
+
+      // Direct Canvas Map (No iframe security blocking hand tracking)
+      if (window.ol) {
+        this.map = new ol.Map({
+          target: this.mapEl,
+          layers: [
+            new ol.layer.Tile({
+              source: new ol.source.XYZ({
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                maxZoom: 19
+              })
+            })
+          ],
+          view: new ol.View({
+            center: ol.proj.fromLonLat([77.2090, 28.6139]),
+            zoom: 4
+          }),
+          controls: []
+        });
+      }
+    }
+
+    close() {
+      this.active = false;
+      this.root.classList.add('hidden');
+      document.body.classList.remove('earth-open');
+      if (this.map) {
+        this.map.setTarget(null);
+        this.map = null;
+      }
+      this.mapEl.innerHTML = '';
+    }
+
+    /** Touchless Map Control with Hand Tracking */
     handleFrame(frame, dt) {
-      const m = this.map;
+      if (!this.active || !this.map) return;
+      const view = this.map.getView();
       const now = performance.now();
 
       for (const h of frame.hands) {
-        // Two Fingers (Peace / Victory) = Return to Space / Close Map
+        // Two Fingers (Victory / Peace) = Close Map & Return to Universe
         if (h.gesture === 'victory' || h.gesture === 'peace') {
           if (now - (this.lastClose || 0) > 1000) {
             this.lastClose = now;
@@ -718,32 +738,33 @@
             return;
           }
         }
-        
-        // Pinch Gestures = Zoom Control (Right: Zoom In, Left: Zoom Out)
+
+        // Pinch Gestures = Zoom Control
         else if (h.gesture === 'pinch') {
-          if (m && this.mode === '3d') {
-            const zoomFactor = h.side === 'right' ? 0.75 : 1.35;
-            m.range = Math.max(200, Math.min(2.2e7, (m.range || 1e6) * zoomFactor));
+          const currentZoom = view.getZoom();
+          if (h.side === 'right') {
+            view.setZoom(Math.min(18, currentZoom + dt * 1.8)); // Right Pinch = Zoom In
+          } else if (h.side === 'left') {
+            view.setZoom(Math.max(2, currentZoom - dt * 1.8));  // Left Pinch = Zoom Out
           }
         }
-        
-        // Open Palm Gesture = Map Pan / Explore & Camera Rotation
+
+        // Open Palm Gesture = Map Pan / Explore Movement
         else if (h.gesture === 'palm' || h.gesture === 'open') {
-          if (m && this.mode === '3d') {
-            const c = m.center;
-            const k = (m.range || 1e6) / 111000 * 3.5;
-            const hd = ((m.heading || 0) * Math.PI) / 180;
-            const dx = h.delta.x * k, up = -h.delta.y * k, cs = Math.cos(hd), sn = Math.sin(hd);
-            const dE = -(dx * cs + up * sn), dN = -(-dx * sn + up * cs);
-            m.center = { lat: Math.max(-85, Math.min(85, c.lat + dN)), lng: c.lng + dE / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180)), altitude: c.altitude || 0 };
-            
-            // Gentle camera rotation with palm motion
-            m.heading = ((m.heading || 0) - h.delta.x * 200 + 360) % 360;
-            m.tilt = Math.max(0, Math.min(80, (m.tilt || 0) + h.delta.y * 120));
-          }
+          const center = view.getCenter();
+          const resolution = view.getResolution();
+          const moveSpeed = resolution * 450;
+
+          const newCenter = [
+            center[0] - h.delta.x * moveSpeed,
+            center[1] + h.delta.y * moveSpeed
+          ];
+
+          view.setCenter(newCenter);
         }
       }
     }
   }
+
   AC.EarthSurface = EarthSurface;
 })();
