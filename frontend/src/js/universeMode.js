@@ -4,7 +4,6 @@
   const { PI } = Math;
   const TAU = PI * 2;
 
-  
   /* ---------- procedural noise + texture helpers ---------- */
   function h3(x, y, z) {
     let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1274126177);
@@ -235,6 +234,7 @@
       this.pmats = [];
       this.atmos = [];
       this.enterGestureFrames = 0;
+      this.threeFingerFrames = 0;
     }
 
     _defaultView(scope) {
@@ -564,8 +564,23 @@
     handleFrame(frame, dt) {
       let pointer = null; const now = performance.now();
       let isTwoFingerEnter = false;
+      let detectedThreeFingers = false;
 
       for (const h of frame.hands) {
+        // 1. THREE FINGERS GESTURE IN SYSTEM SCOPE (Return to Galaxy)
+        const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
+        if (isThree && this.scope === 'system') {
+          detectedThreeFingers = true;
+          this.threeFingerFrames++;
+          if (this.threeFingerFrames >= 3 && (now - (this.lastGalaxyReturn || 0) > 800)) {
+            this.lastGalaxyReturn = now;
+            this.exitToGalaxy();
+            this.threeFingerFrames = 0;
+            return;
+          }
+        }
+
+        // 2. TIME STOP / START TOGGLE (Left = Stop, Right = Start)
         if (h.gesture === 'palm' || h.gesture === 'open') {
           if (h.side === 'left') {
             this.isTimeStopped = true; 
@@ -575,6 +590,7 @@
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
         }
+        // 3. TWO FINGERS GESTURE = Enter System / Land on Earth
         else if (h.gesture === 'victory' || h.gesture === 'peace' || h.fingerCount === 2) {
           isTwoFingerEnter = true;
           this.enterGestureFrames++;
@@ -598,6 +614,7 @@
       }
 
       if (!isTwoFingerEnter) this.enterGestureFrames = 0;
+      if (!detectedThreeFingers) this.threeFingerFrames = 0;
 
       for (const s of ['left', 'right']) if (!frame.hands.find((h) => h.side === s)) this.prevGesture[s] = null;
 
