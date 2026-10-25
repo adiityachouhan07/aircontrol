@@ -1,4 +1,4 @@
-/* AirControl – Presentation Mode (PPTX/PDF Loader + Gesture Slide Navigation) */
+/* AirControl – Safe Presentation Mode */
 (function () {
   const AC = (window.AC = window.AC || {});
 
@@ -9,13 +9,13 @@
       this.hooks = hooks;
       this.active = false;
 
-      this.slides = []; // Array of canvas/image slide elements
+      this.slides = [];
       this.currentIndex = 0;
       this.zoomLevel = 1.0;
       this.panOffset = { x: 0, y: 0 };
 
       this.lastSwipeTime = 0;
-      this.swipeCooldown = 600; // ms between slide changes
+      this.swipeCooldown = 600;
 
       this._bindEvents();
     }
@@ -55,7 +55,6 @@
       }
     }
 
-    /* ---------- PPTX Loader using JSZip ---------- */
     async _parsePPTX(file) {
       if (!window.JSZip) {
         console.error('JSZip library required for PPTX parsing.');
@@ -67,7 +66,6 @@
           fileName.startsWith('ppt/slides/slide') && fileName.endsWith('.xml')
         );
 
-        // Sort slide files numerically
         slideFiles.sort((a, b) => {
           const numA = parseInt(a.match(/\d+/)[0], 10);
           const numB = parseInt(b.match(/\d+/)[0], 10);
@@ -90,11 +88,9 @@
       c.height = 1080;
       const ctx = c.getContext('2d');
 
-      // Slide Background
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, c.width, c.height);
 
-      // Extract text content from PPTX XML
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
       const textNodes = xmlDoc.getElementsByTagName('a:t');
@@ -118,7 +114,6 @@
       return c;
     }
 
-    /* ---------- PDF Loader ---------- */
     async _parsePDF(file) {
       if (!window.pdfjsLib) return;
       const arrayBuffer = await file.arrayBuffer();
@@ -137,7 +132,6 @@
       }
     }
 
-    /* ---------- Image Loader ---------- */
     _loadImage(file) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -153,7 +147,6 @@
       });
     }
 
-    /* ---------- Navigation ---------- */
     nextSlide() {
       if (this.currentIndex < this.slides.length - 1) {
         this.currentIndex++;
@@ -180,22 +173,22 @@
 
       const w = this.canvas.width;
       const h = this.canvas.height;
+      if (!this.ctx) return;
+
       this.ctx.clearRect(0, 0, w, h);
 
       const slide = this.slides[this.currentIndex];
-
       const scale = Math.min(w / slide.width, h / slide.height) * this.zoomLevel;
       const x = (w - slide.width * scale) / 2 + this.panOffset.x;
       const y = (h - slide.height * scale) / 2 + this.panOffset.y;
 
       this.ctx.drawImage(slide, x, y, slide.width * scale, slide.height * scale);
-
-      // Slide Counter Overlay
       this._renderUIOverlay();
     }
 
     _renderUIOverlay() {
       const ctx = this.ctx;
+      if (!ctx) return;
       ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
       ctx.fillRect(30, this.canvas.height - 70, 180, 45);
 
@@ -208,20 +201,17 @@
       );
     }
 
-    /* ---------- Hand Gestures Control ---------- */
     handleFrame(frame, dt) {
       if (!this.active || this.slides.length === 0) return;
 
       const now = performance.now();
 
       for (const h of frame.hands) {
-        // 1. LEFT HAND FIST = Exit Presentation
         if (h.side === 'left' && h.gesture === 'fist') {
           this.hooks.onExit && this.hooks.onExit();
           return;
         }
 
-        // 2. SWIPE / HORIZONTAL HAND MOTION = Slide Change (Next/Prev)
         if (now - this.lastSwipeTime > this.swipeCooldown) {
           if (h.delta.x < -0.12 || h.gesture === 'swipe_left') {
             this.nextSlide();
@@ -232,14 +222,12 @@
           }
         }
 
-        // 3. PINCH = Zoom In / Zoom Out
         if (h.gesture === 'pinch') {
           const factor = h.side === 'right' ? 1.02 : 0.98;
           this.zoomLevel = Math.max(0.8, Math.min(3.0, this.zoomLevel * factor));
           this.renderCurrentSlide();
         }
 
-        // 4. PALM / OPEN HAND = Pan Slide when Zoomed In
         if ((h.gesture === 'palm' || h.gesture === 'open') && this.zoomLevel > 1.05) {
           this.panOffset.x += h.delta.x * 600;
           this.panOffset.y -= h.delta.y * 600;
