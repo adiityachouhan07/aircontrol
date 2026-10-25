@@ -2,216 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AirControl – Touchless Universe & Presenter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AirControl – touchless universe &amp; presenter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/css/styles.css" />
 
-  <!-- External Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.css" />
-
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-    }
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #01030a;
-      font-family: 'Sora', system-ui, sans-serif;
-      color: #fff;
-    }
-    
-    #universe-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-    }
-    #presenter-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 2;
-      background: #000;
-    }
-
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-    
-    #top-nav {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      display: flex;
-      gap: 12px;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(12px);
-      padding: 8px 16px;
-      border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-    .nav-btn {
-      background: transparent;
-      border: none;
-      color: #94a3b8;
-      padding: 8px 18px;
-      font-weight: 600;
-      cursor: pointer;
-      border-radius: 20px;
-      transition: all 0.3s;
-    }
-    .nav-btn.active, .nav-btn:hover {
-      color: #fff;
-      background: rgba(56, 189, 248, 0.25);
-    }
-
-    #presenter-controls {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      z-index: 30;
-      display: flex;
-      gap: 10px;
-      background: rgba(15, 23, 42, 0.9);
-      padding: 8px 14px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-    #slide-file-input {
-      color: #cbd5e1;
-      font-size: 13px;
-    }
-    .control-btn {
-      background: #0284c7;
-      color: white;
-      border: none;
-      padding: 6px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .control-btn:hover {
-      background: #0369a1;
-    }
-
-    .hidden { display: none !important; }
-
-    #btn-back-galaxy {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 20;
-      padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-
-    #body-card {
-      position: absolute;
-      bottom: 30px;
-      right: 30px;
-      width: 320px;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 20px;
-      border-radius: 16px;
-      z-index: 20;
-    }
-
-    #uni-scope {
-      position: absolute;
-      top: 25px;
-      left: 25px;
-      font-weight: 600;
-      font-size: 18px;
-      color: #38bdf8;
-      z-index: 15;
-    }
-  </style>
+  <!-- OpenLayers CSS & JS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/css/ol.css" type="text/css">
+  <script src="https://cdn.jsdelivr.net/gh/openlayers/openlayers.github.io@master/en/v6.15.1/build/ol.js"></script>
 </head>
-<body>
+<body class="mode-universe">
 
-  <div id="top-nav">
-    <button class="nav-btn active" id="mode-universe">Universe</button>
-    <button class="nav-btn" id="mode-presenter">Presenter</button>
-  </div>
+  <header id="topbar" class="glass">
+    <div class="brand"><span class="brand-dot"></span>AirControl</div>
+    <nav id="mode-tabs" aria-label="Mode">
+      <button data-mode="universe" class="tab active" title="Key: 1">Universe</button>
+      <button data-mode="presenter" class="tab" title="Key: 2">Presenter</button>
+    </nav>
+    <div class="status">
+      <span id="cam-status" class="pill off" title="Camera status">Camera off</span>
+      <span id="gesture-status" class="pill">No hand</span>
+      <button id="cam-btn" class="btn-glow">Enable hand tracking</button>
+    </div>
+  </header>
 
-  <span id="uni-scope">Milky Way</span>
-  <button id="btn-back-galaxy" class="hidden">← Back to Galaxy</button>
-
-  <div id="presenter-controls" class="hidden">
-    <input type="file" id="slide-file-input" multiple accept="image/*" />
-    <button id="ppt-prev" class="control-btn">Prev</button>
-    <button id="ppt-next" class="control-btn">Next</button>
-  </div>
-
-  <div id="universe-container">
+  <section id="universe-root" class="mode-root">
     <canvas id="universe-canvas"></canvas>
+
+    <div id="uni-breadcrumb" class="glass">
+      <button id="btn-back-galaxy" class="link hidden">← Galaxy</button>
+      <span id="uni-scope">Milky Way</span>
+    </div>
+
+    <aside id="gesture-help" class="glass">
+      <div><b>Open palm</b> rotate</div>
+      <div><b>Pinch left</b> zoom out</div>
+      <div><b>Pinch right</b> zoom in</div>
+      <div><b>Point &amp; hold</b> select</div>
+      <div><b>Fist</b> reset view</div>
+      <div class="muted">Mouse: drag · wheel · click · R reset</div>
+    </aside>
+
+    <div id="body-card" class="glass hidden">
+      <button id="card-close" class="icon-btn" aria-label="Close">×</button>
+      <h2 id="card-title"></h2>
+      <p id="card-type" class="muted"></p>
+      <p id="card-desc"></p>
+      <dl id="card-facts"></dl>
+      <div class="card-actions">
+        <button id="card-action" class="btn-glow hidden"></button>
+      </div>
+    </div>
+
+    <div id="earth-view" class="hidden">
+      <div id="earth-map"></div>
+      
+      <!-- Earth Location Search Bar -->
+      <div id="earth-search-box" class="glass">
+        <input type="text" id="earth-search-input" placeholder="Search location (e.g., Tokyo, Delhi, Paris)..." autocomplete="off" />
+        <div id="earth-search-results" class="glass hidden"></div>
+      </div>
+
+      <div id="earth-note" class="glass hidden"></div>
+      <button id="earth-return" class="btn-glow">Return to Space</button>
+      <div id="earth-help" class="glass">
+        <div><b>Open palm</b> explore / pan map</div>
+        <div><b>Pinch right</b> zoom in</div>
+        <div><b>Pinch left</b> zoom out</div>
+        <div><b>Three fingers</b> return to space</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="presenter-root" class="mode-root hidden">
+    <div id="stage">
+      <canvas id="slide-canvas"></canvas>
+      <canvas id="ann-canvas"></canvas>
+      <canvas id="live-canvas"></canvas>
+      <canvas id="fx-canvas"></canvas>
+      <div id="edge-prev" class="edge"></div>
+      <div id="edge-next" class="edge"></div>
+    </div>
+
+    <div id="toolbar" class="glass">
+      <label class="tool-btn" title="Upload PDF / PPT / PPTX">
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14"
+            fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <input id="file-input" type="file"
+          accept=".pdf,.ppt,.pptx,application/pdf" hidden />
+      </label>
+      <div id="swatches"></div>
+      <input id="thickness" type="range" min="2" max="24"
+        value="5" title="Pen thickness" />
+    </div>
+
+    <div id="pres-indicator" class="glass">
+      <span id="page-ind">1 / 1</span>
+      <span id="tool-ind">Pen</span>
+    </div>
+    <div id="toast" class="glass hidden"></div>
+
+    <!-- Floating FaceCam Overlay for Thumbs Up Fullscreen Mode -->
+    <div id="presenter-facecam" class="glass hidden">
+      <video id="presenter-face-video" autoplay playsinline muted></video>
+    </div>
+  </section>
+
+  <div id="cursor-0" class="hand-cursor hidden">
+    <svg viewBox="0 0 48 48">
+      <circle class="ring" cx="24" cy="24" r="20"/>
+    </svg><i></i>
   </div>
 
-  <div id="presenter-container" class="hidden">
-    <canvas id="presenter-canvas"></canvas>
+  <div id="cursor-1" class="hand-cursor hidden">
+    <svg viewBox="0 0 48 48">
+      <circle class="ring" cx="24" cy="24" r="20"/>
+    </svg><i></i>
   </div>
 
-  <div id="earth-view" class="hidden" style="position: absolute; width: 100%; height: 100%; z-index: 10;">
-    <div id="earth-map" style="width: 100%; height: 100%;"></div>
-    <button id="earth-return" style="position: absolute; top: 20px; left: 20px; z-index: 25;" class="control-btn">Back to Space</button>
+  <div id="cam-preview" class="glass">
+    <video id="cam-video" playsinline muted></video>
+    <canvas id="cam-overlay"></canvas>
   </div>
 
-  <div id="body-card" class="hidden">
-    <span id="card-close" style="float: right; cursor: pointer;">✕</span>
-    <h2 id="card-title" style="color: #38bdf8;"></h2>
-    <p id="card-type" style="font-size: 12px; color: #94a3b8; margin-bottom: 10px;"></p>
-    <p id="card-desc" style="font-size: 14px; margin-bottom: 15px;"></p>
-    <dl id="card-facts" style="font-size: 13px;"></dl>
-    <button id="card-action" class="control-btn hidden" style="width: 100%; margin-top: 15px;"></button>
-  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const btnUniverse = document.getElementById('mode-universe');
-      const btnPresenter = document.getElementById('mode-presenter');
-      const universeBox = document.getElementById('universe-container');
-      const presenterBox = document.getElementById('presenter-container');
-      const presenterControls = document.getElementById('presenter-controls');
-
-      btnUniverse.onclick = () => {
-        btnUniverse.classList.add('active');
-        btnPresenter.classList.remove('active');
-        universeBox.classList.remove('hidden');
-        presenterBox.classList.add('hidden');
-        presenterControls.classList.add('hidden');
-      };
-
-      btnPresenter.onclick = () => {
-        btnPresenter.classList.add('active');
-        btnUniverse.classList.remove('active');
-        universeBox.classList.add('hidden');
-        presenterBox.classList.remove('hidden');
-        presenterControls.classList.remove('hidden');
-      };
-    });
-  </script>
-
-  <script src="universeMode.js"></script>
-  <script src="presenterMode.js"></script>
-
+  <script src="/src/js/handTracking.js"></script>
+  <script src="/src/js/universeMode.js"></script>
+  <script src="/src/js/presenterMode.js"></script>
+  <script src="/src/js/main.js"></script>
 </body>
 </html>
