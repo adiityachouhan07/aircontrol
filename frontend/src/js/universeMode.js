@@ -234,8 +234,7 @@
       this.pmats = [];
       this.atmos = [];
       this.enterGestureFrames = 0;
-      this.threeFingerFrames = 0;
-      this.threeFingerReleased = true;
+      this.leftFistFrames = 0;
       this.ignoreGesturesUntil = 0;
     }
 
@@ -561,8 +560,7 @@
       this.dwellBody = null;
       this.hover = null;
       this.enterGestureFrames = 0;
-      this.threeFingerFrames = 0;
-      this.threeFingerReleased = true;
+      this.leftFistFrames = 0;
       this.ignoreGesturesUntil = performance.now() + 1000;
       this.prevGesture = {};
       this._renderCard(null);
@@ -583,8 +581,7 @@
       this.dwellBody = null;
       this.hover = null;
       this.enterGestureFrames = 0;
-      this.threeFingerFrames = 0;
-      this.threeFingerReleased = false; 
+      this.leftFistFrames = 0;
       this.ignoreGesturesUntil = performance.now() + 1000;
       this.prevGesture = {};
       this._renderCard(null);
@@ -606,32 +603,25 @@
       }
 
       let isTwoFingerEnter = false;
-      let detectedThreeFingers = false;
+      let detectedLeftFist = false;
 
       for (const h of frame.hands) {
-        const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
-
-        if (!isThree) {
-          this.threeFingerReleased = true;
-        }
-
-        // 1. THREE FINGERS GESTURE IN SYSTEM SCOPE (Return to Galaxy)
-        if (isThree && this.scope === 'system' && this.threeFingerReleased) {
-          detectedThreeFingers = true;
-          this.threeFingerFrames++;
-          if (this.threeFingerFrames >= 3 && (now - (this.lastGalaxyReturn || 0) > 800)) {
-            this.lastGalaxyReturn = now;
-            this.threeFingerReleased = false; 
-            this.exitToGalaxy();
-            this.threeFingerFrames = 0;
-            return;
+        // 1. LEFT HAND FIST = Return to Galaxy from Solar System
+        if (h.side === 'left' && h.gesture === 'fist') {
+          detectedLeftFist = true;
+          if (this.scope === 'system') {
+            this.leftFistFrames++;
+            if (this.leftFistFrames >= 3 && (now - (this.lastGalaxyReturn || 0) > 800)) {
+              this.lastGalaxyReturn = now;
+              this.exitToGalaxy();
+              this.leftFistFrames = 0;
+              return { side: 'left', progress: 0, hovering: false };
+            }
           }
         }
 
-        // 2. ROTATION / EXPLORE GESTURE (Palm, Open, OR 3-fingers in Galaxy view to prevent any freeze)
-        const isRotationGesture = h.gesture === 'palm' || h.gesture === 'open' || (this.scope === 'galaxy' && isThree);
-
-        if (isRotationGesture) {
+        // 2. ROTATION / EXPLORE GESTURE (Palm / Open Hand)
+        if (h.gesture === 'palm' || h.gesture === 'open') {
           if (h.side === 'left') {
             this.isTimeStopped = true; 
           } else if (h.side === 'right') {
@@ -656,7 +646,8 @@
         }
         else if (h.gesture === 'point') pointer = h;
 
-        if (h.gesture === 'fist' && this.prevGesture[h.side] !== 'fist' && now - this.lastReset > 800) { 
+        // RIGHT HAND FIST = Reset Camera / Focus
+        if (h.side === 'right' && h.gesture === 'fist' && this.prevGesture[h.side] !== 'fist' && now - this.lastReset > 800) { 
           this.lastReset = now; 
           this.reset(); 
         }
@@ -664,7 +655,7 @@
       }
 
       if (!isTwoFingerEnter) this.enterGestureFrames = 0;
-      if (!detectedThreeFingers) this.threeFingerFrames = 0;
+      if (!detectedLeftFist) this.leftFistFrames = 0;
 
       for (const s of ['left', 'right']) if (!frame.hands.find((h) => h.side === s)) this.prevGesture[s] = null;
 
@@ -741,7 +732,7 @@
   AC.UniverseMode = UniverseMode;
 })();
 
-/* ================== OpenLayers Earth Surface (City Labels + Search Bar + 3-Finger Return) ================== */
+/* ================== OpenLayers Earth Surface (City Labels + Search Bar + Left-Fist Return) ================== */
 (function () {
   const AC = (window.AC = window.AC || {});
 
@@ -751,7 +742,7 @@
       this.mapEl = document.getElementById('earth-map');
       this.active = false;
       this.map = null;
-      this.threeFingerFrames = 0;
+      this.leftFistFrames = 0;
 
       const retBtn = document.getElementById('earth-return');
       if (retBtn) retBtn.onclick = () => this.close();
@@ -829,7 +820,7 @@
       this.root.classList.remove('hidden');
       document.body.classList.add('earth-open');
       this.mapEl.innerHTML = '';
-      this.threeFingerFrames = 0;
+      this.leftFistFrames = 0;
 
       const searchInput = document.getElementById('earth-search-input');
       if (searchInput) searchInput.value = '';
@@ -871,7 +862,7 @@
         this.map = null;
       }
       this.mapEl.innerHTML = '';
-      this.threeFingerFrames = 0;
+      this.leftFistFrames = 0;
     }
 
     handleFrame(frame, dt) {
@@ -879,16 +870,14 @@
       const view = this.map.getView();
       const now = performance.now();
 
-      let detectedThreeFingers = false;
+      let detectedLeftFist = false;
 
       for (const h of frame.hands) {
-        const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
+        if (h.side === 'left' && h.gesture === 'fist') {
+          detectedLeftFist = true;
+          this.leftFistFrames++;
 
-        if (isThree) {
-          detectedThreeFingers = true;
-          this.threeFingerFrames++;
-
-          if (this.threeFingerFrames >= 3 && (now - (this.lastClose || 0) > 800)) {
+          if (this.leftFistFrames >= 3 && (now - (this.lastClose || 0) > 800)) {
             this.lastClose = now;
             this.close();
             return;
@@ -916,8 +905,8 @@
         }
       }
 
-      if (!detectedThreeFingers) {
-        this.threeFingerFrames = 0;
+      if (!detectedLeftFist) {
+        this.leftFistFrames = 0;
       }
     }
   }
