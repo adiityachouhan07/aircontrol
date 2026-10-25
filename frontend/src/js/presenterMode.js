@@ -1,11 +1,13 @@
-/* AirControl – Safe Presentation Mode */
+/* AirControl – Standard Image Presenter Mode */
 (function () {
   const AC = (window.AC = window.AC || {});
 
   class PresenterMode {
     constructor(canvas, hooks = {}) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext('2d');
+      this.canvas = canvas || document.getElementById('presenter-canvas');
+      if (!this.canvas) return;
+
+      this.ctx = this.canvas.getContext('2d');
       this.hooks = hooks;
       this.active = false;
 
@@ -15,15 +17,28 @@
       this.panOffset = { x: 0, y: 0 };
 
       this.lastSwipeTime = 0;
-      this.swipeCooldown = 600;
+      this.swipeCooldown = 500;
 
       this._bindEvents();
+      this.resize();
+      window.addEventListener('resize', () => this.resize());
+    }
+
+    resize() {
+      if (!this.canvas) return;
+      this.canvas.width = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : window.innerWidth;
+      this.canvas.height = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : window.innerHeight;
+      this.renderCurrentSlide();
     }
 
     _bindEvents() {
-      const fileInput = document.getElementById('ppt-file-input');
+      const fileInput = document.getElementById('slide-file-input');
       if (fileInput) {
-        fileInput.addEventListener('change', (e) => this.loadPresentationFile(e.target.files[0]));
+        fileInput.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            this.loadImages(Array.from(e.target.files));
+          }
+        });
       }
 
       const prevBtn = document.getElementById('ppt-prev');
@@ -32,103 +47,18 @@
       if (nextBtn) nextBtn.onclick = () => this.nextSlide();
     }
 
-    async loadPresentationFile(file) {
-      if (!file) return;
-
-      const fileType = file.name.split('.').pop().toLowerCase();
+    async loadImages(files) {
       this.slides = [];
-
-      if (fileType === 'pptx') {
-        await this._parsePPTX(file);
-      } else if (fileType === 'pdf') {
-        await this._parsePDF(file);
-      } else if (['png', 'jpg', 'jpeg', 'webp'].includes(fileType)) {
-        await this._loadImage(file);
-      } else {
-        alert('Please upload a .pptx, .pdf, or image file!');
-        return;
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          await this._loadImage(file);
+        }
       }
 
       if (this.slides.length > 0) {
         this.currentIndex = 0;
+        this.resetZoom();
         this.renderCurrentSlide();
-      }
-    }
-
-    async _parsePPTX(file) {
-      if (!window.JSZip) {
-        console.error('JSZip library required for PPTX parsing.');
-        return;
-      }
-      try {
-        const zip = await JSZip.loadAsync(file);
-        const slideFiles = Object.keys(zip.files).filter((fileName) =>
-          fileName.startsWith('ppt/slides/slide') && fileName.endsWith('.xml')
-        );
-
-        slideFiles.sort((a, b) => {
-          const numA = parseInt(a.match(/\d+/)[0], 10);
-          const numB = parseInt(b.match(/\d+/)[0], 10);
-          return numA - numB;
-        });
-
-        for (let i = 0; i < slideFiles.length; i++) {
-          const slideXml = await zip.files[slideFiles[i]].async('text');
-          const slideCanvas = this._renderPPTXSlideToCanvas(slideXml, i + 1);
-          this.slides.push(slideCanvas);
-        }
-      } catch (err) {
-        console.error('Failed to parse PPTX:', err);
-      }
-    }
-
-    _renderPPTXSlideToCanvas(xmlText, slideNum) {
-      const c = document.createElement('canvas');
-      c.width = 1920;
-      c.height = 1080;
-      const ctx = c.getContext('2d');
-
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, c.width, c.height);
-
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-      const textNodes = xmlDoc.getElementsByTagName('a:t');
-
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 42px Sora, sans-serif';
-      ctx.textAlign = 'center';
-
-      let yOffset = 250;
-      ctx.fillText(`Slide ${slideNum}`, c.width / 2, 140);
-
-      ctx.font = '28px Sora, sans-serif';
-      for (let i = 0; i < textNodes.length && i < 12; i++) {
-        const text = textNodes[i].textContent.trim();
-        if (text) {
-          ctx.fillText(text, c.width / 2, yOffset);
-          yOffset += 55;
-        }
-      }
-
-      return c;
-    }
-
-    async _parsePDF(file) {
-      if (!window.pdfjsLib) return;
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const c = document.createElement('canvas');
-        c.width = viewport.width;
-        c.height = viewport.height;
-        const ctx = c.getContext('2d');
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        this.slides.push(c);
       }
     }
 
@@ -169,13 +99,19 @@
     }
 
     renderCurrentSlide() {
-      if (!this.canvas || this.slides.length === 0) return;
+      if (!this.canvas || !this.ctx) return;
 
       const w = this.canvas.width;
       const h = this.canvas.height;
-      if (!this.ctx) return;
-
       this.ctx.clearRect(0, 0, w, h);
+
+      if (this.slides.length === 0) {
+        this.ctx.fillStyle = '#64748b';
+        this.ctx.font = '20px Sora, sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Select image slides to present', w / 2, h / 2);
+        return;
+      }
 
       const slide = this.slides[this.currentIndex];
       const scale = Math.min(w / slide.width, h / slide.height) * this.zoomLevel;
@@ -183,40 +119,31 @@
       const y = (h - slide.height * scale) / 2 + this.panOffset.y;
 
       this.ctx.drawImage(slide, x, y, slide.width * scale, slide.height * scale);
-      this._renderUIOverlay();
-    }
 
-    _renderUIOverlay() {
-      const ctx = this.ctx;
-      if (!ctx) return;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-      ctx.fillRect(30, this.canvas.height - 70, 180, 45);
-
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = '600 18px Sora, sans-serif';
-      ctx.fillText(
-        `Slide ${this.currentIndex + 1} / ${this.slides.length}`,
-        50,
-        this.canvas.height - 40
-      );
+      // Slide counter
+      this.ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+      this.ctx.fillRect(20, h - 55, 140, 35);
+      this.ctx.fillStyle = '#38bdf8';
+      this.ctx.font = '600 15px Sora, sans-serif';
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(`Slide ${this.currentIndex + 1} / ${this.slides.length}`, 35, h - 32);
     }
 
     handleFrame(frame, dt) {
-      if (!this.active || this.slides.length === 0) return;
-
+      if (this.slides.length === 0) return;
       const now = performance.now();
 
       for (const h of frame.hands) {
         if (h.side === 'left' && h.gesture === 'fist') {
-          this.hooks.onExit && this.hooks.onExit();
+          if (this.hooks.onExit) this.hooks.onExit();
           return;
         }
 
         if (now - this.lastSwipeTime > this.swipeCooldown) {
-          if (h.delta.x < -0.12 || h.gesture === 'swipe_left') {
+          if (h.delta && h.delta.x < -0.12) {
             this.nextSlide();
             this.lastSwipeTime = now;
-          } else if (h.delta.x > 0.12 || h.gesture === 'swipe_right') {
+          } else if (h.delta && h.delta.x > 0.12) {
             this.prevSlide();
             this.lastSwipeTime = now;
           }
@@ -229,8 +156,8 @@
         }
 
         if ((h.gesture === 'palm' || h.gesture === 'open') && this.zoomLevel > 1.05) {
-          this.panOffset.x += h.delta.x * 600;
-          this.panOffset.y -= h.delta.y * 600;
+          this.panOffset.x += h.delta.x * 500;
+          this.panOffset.y -= h.delta.y * 500;
           this.renderCurrentSlide();
         }
       }
