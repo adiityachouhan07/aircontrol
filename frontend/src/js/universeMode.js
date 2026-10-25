@@ -1,4 +1,4 @@
-/* AirControl – 3D Universe mode (Three.js r128) + OpenLayers Canvas Earth Surface with Search & Labels */
+/* AirControl – 3D Universe mode (Three.js r128) + OpenLayers Canvas Earth Surface */
 (function () {
   const AC = (window.AC = window.AC || {});
   const { PI } = Math;
@@ -620,17 +620,32 @@
           }
         }
 
-        // 2. ROTATION / EXPLORE GESTURE (Palm / Open Hand)
-        if (h.gesture === 'palm' || h.gesture === 'open') {
-          if (h.side === 'left') {
-            this.isTimeStopped = true; 
-          } else if (h.side === 'right') {
-            this.isTimeStopped = false; 
+        // 2. TIME CONTROL: RIGHT HAND 4 FINGERS/PALM = STOP TIME, LEFT HAND 4 FINGERS/PALM = START TIME
+        const isFourFingersOrPalm = h.gesture === 'palm' || h.gesture === 'open' || h.fingerCount >= 4;
+        if (isFourFingersOrPalm) {
+          if (h.side === 'right') {
+            this.isTimeStopped = true; // Right Hand 4 fingers = Time Stop
+          } else if (h.side === 'left') {
+            this.isTimeStopped = false; // Left Hand 4 fingers = Time Start
           }
+        }
+
+        // ROTATION (Right hand panning)
+        if (h.side === 'right' && isFourFingersOrPalm && h.delta) {
           this.goal.theta -= h.delta.x * 5.5; 
           this.goal.phi = this._clampPhi(this.goal.phi - h.delta.y * 3.5); 
         }
-        // 3. TWO FINGERS GESTURE = Enter System / Land on Earth
+
+        // 3. ZOOM CONTROL: Right Hand Pinch = Zoom In, Left Hand Pinch = Zoom Out
+        if (h.gesture === 'pinch') {
+          if (h.side === 'right') {
+            this._zoom(Math.exp(-dt * 2.2)); // ZOOM IN (Right Hand)
+          } else if (h.side === 'left') {
+            this._zoom(Math.exp(dt * 2.2));  // ZOOM OUT (Left Hand)
+          }
+        }
+
+        // 4. TWO FINGERS GESTURE = Enter System / Land on Earth
         else if (h.gesture === 'victory' || h.gesture === 'peace' || h.fingerCount === 2) {
           isTwoFingerEnter = true;
           this.enterGestureFrames++;
@@ -640,9 +655,6 @@
             if (this.selected.kind === 'solar') this.enterSystem();
             else if (this.selected.id === 'earth') this.hooks.onLand && this.hooks.onLand();
           }
-        }
-        else if (h.gesture === 'pinch') {
-          this._zoom(Math.exp((h.side === 'left' ? -1 : 1) * dt * 1.1));
         }
         else if (h.gesture === 'point') pointer = h;
 
@@ -732,7 +744,7 @@
   AC.UniverseMode = UniverseMode;
 })();
 
-/* ================== OpenLayers Earth Surface (City Labels + Search Bar + Left-Fist Return) ================== */
+/* ================== OpenLayers Earth Surface (City Labels + Search Bar + 3-Finger Return) ================== */
 (function () {
   const AC = (window.AC = window.AC || {});
 
@@ -742,7 +754,7 @@
       this.mapEl = document.getElementById('earth-map');
       this.active = false;
       this.map = null;
-      this.leftFistFrames = 0;
+      this.threeFingerFrames = 0;
 
       const retBtn = document.getElementById('earth-return');
       if (retBtn) retBtn.onclick = () => this.close();
@@ -820,7 +832,7 @@
       this.root.classList.remove('hidden');
       document.body.classList.add('earth-open');
       this.mapEl.innerHTML = '';
-      this.leftFistFrames = 0;
+      this.threeFingerFrames = 0;
 
       const searchInput = document.getElementById('earth-search-input');
       if (searchInput) searchInput.value = '';
@@ -862,7 +874,7 @@
         this.map = null;
       }
       this.mapEl.innerHTML = '';
-      this.leftFistFrames = 0;
+      this.threeFingerFrames = 0;
     }
 
     handleFrame(frame, dt) {
@@ -870,14 +882,17 @@
       const view = this.map.getView();
       const now = performance.now();
 
-      let detectedLeftFist = false;
+      let detectedThreeFingers = false;
 
       for (const h of frame.hands) {
-        if (h.side === 'left' && h.gesture === 'fist') {
-          detectedLeftFist = true;
-          this.leftFistFrames++;
+        // 3-FINGER GESTURE TO RETURN FROM EARTH SURFACE BACK TO SPACE
+        const isThree = h.gesture === 'three' || h.gesture === '3' || h.fingerCount === 3;
 
-          if (this.leftFistFrames >= 3 && (now - (this.lastClose || 0) > 800)) {
+        if (isThree) {
+          detectedThreeFingers = true;
+          this.threeFingerFrames++;
+
+          if (this.threeFingerFrames >= 3 && (now - (this.lastClose || 0) > 800)) {
             this.lastClose = now;
             this.close();
             return;
@@ -905,8 +920,8 @@
         }
       }
 
-      if (!detectedLeftFist) {
-        this.leftFistFrames = 0;
+      if (!detectedThreeFingers) {
+        this.threeFingerFrames = 0;
       }
     }
   }
