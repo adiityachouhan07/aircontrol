@@ -3,12 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AirControl – Touchless Interface</title>
+  <title>AirControl – Touchless Universe & Presenter</title>
 
-  <!-- External Libraries (3D Graphics, PPTX Parser & PDF Renderer) -->
+  <!-- External Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/openlayers@4.6.5/dist/ol.css" />
 
@@ -27,7 +25,8 @@
       font-family: 'Sora', system-ui, sans-serif;
       color: #fff;
     }
-    #canvas-container {
+    
+    #universe-container {
       position: absolute;
       top: 0;
       left: 0;
@@ -35,32 +34,41 @@
       height: 100%;
       z-index: 1;
     }
+    #presenter-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      background: #000;
+    }
+
     canvas {
       width: 100%;
       height: 100%;
       display: block;
     }
     
-    /* Top Bar & UI Overlays */
     #top-nav {
       position: absolute;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 10;
+      z-index: 20;
       display: flex;
-      gap: 15px;
-      background: rgba(15, 23, 42, 0.8);
+      gap: 12px;
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(12px);
-      padding: 8px 18px;
+      padding: 8px 16px;
       border-radius: 30px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
     .nav-btn {
       background: transparent;
       border: none;
       color: #94a3b8;
-      padding: 8px 16px;
+      padding: 8px 18px;
       font-weight: 600;
       cursor: pointer;
       border-radius: 20px;
@@ -68,25 +76,24 @@
     }
     .nav-btn.active, .nav-btn:hover {
       color: #fff;
-      background: rgba(56, 189, 248, 0.2);
+      background: rgba(56, 189, 248, 0.25);
     }
 
-    /* Presenter Mode Controls */
     #presenter-controls {
       position: absolute;
       top: 20px;
       right: 20px;
-      z-index: 20;
+      z-index: 30;
       display: flex;
       gap: 10px;
-      background: rgba(15, 23, 42, 0.85);
-      padding: 10px 15px;
+      background: rgba(15, 23, 42, 0.9);
+      padding: 8px 14px;
       border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.15);
     }
-    #ppt-file-input {
+    #slide-file-input {
       color: #cbd5e1;
-      font-size: 14px;
+      font-size: 13px;
     }
     .control-btn {
       background: #0284c7;
@@ -101,13 +108,13 @@
       background: #0369a1;
     }
 
-    /* Info Card & Back Buttons */
     .hidden { display: none !important; }
+
     #btn-back-galaxy {
       position: absolute;
       top: 20px;
       left: 20px;
-      z-index: 10;
+      z-index: 20;
       padding: 8px 16px;
       background: rgba(255, 255, 255, 0.1);
       border: 1px solid rgba(255, 255, 255, 0.2);
@@ -115,6 +122,7 @@
       border-radius: 8px;
       cursor: pointer;
     }
+
     #body-card {
       position: absolute;
       bottom: 30px;
@@ -124,39 +132,49 @@
       border: 1px solid rgba(56, 189, 248, 0.3);
       padding: 20px;
       border-radius: 16px;
-      z-index: 10;
+      z-index: 20;
+    }
+
+    #uni-scope {
+      position: absolute;
+      top: 25px;
+      left: 25px;
+      font-weight: 600;
+      font-size: 18px;
+      color: #38bdf8;
+      z-index: 15;
     }
   </style>
 </head>
 <body>
 
-  <!-- Top Navigation -->
   <div id="top-nav">
     <button class="nav-btn active" id="mode-universe">Universe</button>
     <button class="nav-btn" id="mode-presenter">Presenter</button>
   </div>
 
+  <span id="uni-scope">Milky Way</span>
   <button id="btn-back-galaxy" class="hidden">← Back to Galaxy</button>
 
-  <!-- Presenter Mode Controls Panel -->
   <div id="presenter-controls" class="hidden">
-    <input type="file" id="ppt-file-input" accept=".pptx,.pdf,image/*" />
+    <input type="file" id="slide-file-input" multiple accept="image/*" />
     <button id="ppt-prev" class="control-btn">Prev</button>
     <button id="ppt-next" class="control-btn">Next</button>
   </div>
 
-  <!-- Main Canvas Container -->
-  <div id="canvas-container">
+  <div id="universe-container">
     <canvas id="universe-canvas"></canvas>
   </div>
 
-  <!-- Earth View Container for OpenLayers -->
-  <div id="earth-view" class="hidden" style="position: absolute; width: 100%; height: 100%; z-index: 5;">
-    <div id="earth-map" style="width: 100%; height: 100%;"></div>
-    <button id="earth-return" style="position: absolute; top: 20px; left: 20px; z-index: 15;" class="control-btn">Back to Space</button>
+  <div id="presenter-container" class="hidden">
+    <canvas id="presenter-canvas"></canvas>
   </div>
 
-  <!-- Planet Info Card Overlay -->
+  <div id="earth-view" class="hidden" style="position: absolute; width: 100%; height: 100%; z-index: 10;">
+    <div id="earth-map" style="width: 100%; height: 100%;"></div>
+    <button id="earth-return" style="position: absolute; top: 20px; left: 20px; z-index: 25;" class="control-btn">Back to Space</button>
+  </div>
+
   <div id="body-card" class="hidden">
     <span id="card-close" style="float: right; cursor: pointer;">✕</span>
     <h2 id="card-title" style="color: #38bdf8;"></h2>
@@ -166,7 +184,32 @@
     <button id="card-action" class="control-btn hidden" style="width: 100%; margin-top: 15px;"></button>
   </div>
 
-  <!-- JS Mode Files Loading -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const btnUniverse = document.getElementById('mode-universe');
+      const btnPresenter = document.getElementById('mode-presenter');
+      const universeBox = document.getElementById('universe-container');
+      const presenterBox = document.getElementById('presenter-container');
+      const presenterControls = document.getElementById('presenter-controls');
+
+      btnUniverse.onclick = () => {
+        btnUniverse.classList.add('active');
+        btnPresenter.classList.remove('active');
+        universeBox.classList.remove('hidden');
+        presenterBox.classList.add('hidden');
+        presenterControls.classList.add('hidden');
+      };
+
+      btnPresenter.onclick = () => {
+        btnPresenter.classList.add('active');
+        btnUniverse.classList.remove('active');
+        universeBox.classList.add('hidden');
+        presenterBox.classList.remove('hidden');
+        presenterControls.classList.remove('hidden');
+      };
+    });
+  </script>
+
   <script src="universeMode.js"></script>
   <script src="presenterMode.js"></script>
 
